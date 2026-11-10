@@ -99,5 +99,38 @@
   <div id="voice-caption" class="caption-under" hidden>No Spanish voice available on this device</div>
 
   <script type="module" src="js/app.js"></script>
+  <script type="module">
+    // Temporary wiring for issue #12 — moves into js/app.js when the
+    // startup flow (auth → sheets → review UI) is implemented.
+    import { CLIENT_ID } from "./js/config.js";
+    import * as auth from "./js/auth.js";
+
+    const button = document.getElementById("sign-in");
+    const status = document.getElementById("auth-status");
+
+    button.addEventListener("click", async () => {
+      status.textContent = "Waiting for Google\u2026";
+      try {
+        await auth.requestToken(); // interactive popup (user gesture)
+      } catch {
+        status.textContent = "Sign-in failed \u2014 try again";
+      }
+    });
+
+    try {
+      await auth.init(CLIENT_ID);
+      // Returning browser with a live Google session: token without a popup.
+      await auth.requestToken({ silent: true });
+    } catch {
+      // Fresh browser (or silent refresh failed): fall through — the
+      // subscription below renders the signed-out state.
+    }
+
+    // Runs immediately with the current state, then on every change.
+    auth.onAuthChange((signedIn) => {
+      button.hidden = signedIn;
+      status.textContent = signedIn ? "Connected to Google" : "Not connected";
+    });
+  </script>
 </body>
 </html>
