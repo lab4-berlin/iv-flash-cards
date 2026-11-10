@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockups — Flashcard Review (issues #2, #5)</title>
+<style>
+  /* ---------- gallery chrome (not part of the product UI) ---------- */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #F4F4F4; color: #000; padding: 40px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .gallery-sub { font-size: 13px; color: #666; margin-bottom: 40px; }
+  .state { margin-bottom: 56px; }
+  .state > h2 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .08em; margin-bottom: 4px;
+  }
+  .state > p { font-size: 13px; color: #666; margin-bottom: 16px; max-width: 720px; }
+  .frames { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .frame-label {
+    font-size: 11px; color: #666; text-transform: uppercase;
+    letter-spacing: .08em; margin-bottom: 6px;
+  }
+
+  /* ---------- device frames ---------- */
+  .phone, .desktop { border: 1px solid #000; background: #FFF; overflow: hidden; }
+  .phone   { width: 375px; height: 640px; }
+  .desktop { width: 820px; height: 560px; }
+  .screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+  /* ---------- product UI, per design-system.md ---------- */
+  .banner {
+    background: #000; color: #FFF; text-align: center;
+    font-size: 12px; font-weight: 500; letter-spacing: .08em;
+    text-transform: uppercase; padding: 10px 16px;
+  }
+  .progress { padding: 16px; }
+  .desktop .progress { max-width: 560px; width: 100%; margin: 0 auto; padding: 24px 0 0; }
+  .progress .count {
+    font-size: 12px; font-weight: 500; letter-spacing: .08em;
+    color: #666; margin-bottom: 8px;
+  }
+  .bar { height: 2px; background: #DDD; }
+  .bar .fill { height: 2px; background: #000; }
+
+  .stage {
+    flex: 1; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; padding: 16px;
+  }
+  .card {
+    background: #FFF; border: 1px solid #000; width: 100%;
+    display: flex; flex-direction: column; padding: 24px;
+    min-height: 340px;
+  }
+  .desktop .card { max-width: 560px; padding: 32px; min-height: 300px; }
+
+  .card-center { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 12px; }
+  .word { font-size: 36px; font-weight: 600; line-height: 1.2; display: flex; align-items: center; gap: 12px; }
+  .desktop .word { font-size: 48px; }
+  .word-small { font-size: 20px; font-weight: 600; color: #000; display: flex; align-items: center; gap: 8px; }
+  .hint { font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #666; text-align: center; }
+
+  .divider { border: none; border-top: 1px solid #DDD; margin: 16px 0; width: 100%; }
+  .translation { font-size: 24px; line-height: 1.3; }
+  .desktop .translation { font-size: 30px; }
+  .phrase { font-size: 17px; font-style: italic; line-height: 1.5; color: #000; display: flex; gap: 10px; align-items: flex-start; }
+  .desktop .phrase { font-size: 19px; }
+
+  .speaker { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; flex: none; cursor: pointer; }
+  .speaker svg { width: 24px; height: 24px; fill: #000; }
+  .speaker.sm { width: 32px; height: 32px; }
+  .speaker.sm svg { width: 18px; height: 18px; }
+  .speaker.disabled svg { fill: #DDD; }
+
+  .grades { display: flex; gap: 12px; width: 100%; padding: 16px; }
+  .desktop .grades { max-width: 560px; margin: 0 auto; padding: 16px 0 8px; }
+  .btn {
+    flex: 1; min-height: 48px; font-size: 16px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    font-family: inherit; cursor: pointer;
+  }
+  .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
+  .btn.outline { background: #FFF; color: #000; border: 1px solid #000; }
+  .btn.single { flex: none; width: 100%; }
+  .desktop .btn.single { width: 240px; margin: 0 auto; }
+  .keys { display: flex; gap: 12px; max-width: 560px; margin: 0 auto; width: 100%; padding-bottom: 24px; }
+  .keys span { flex: 1; text-align: center; font-size: 12px; color: #666; letter-spacing: .08em; }
+
+  .message { text-align: center; max-width: 360px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .message h3 { font-size: 24px; font-weight: 600; }
+  .message p { font-size: 16px; line-height: 1.5; color: #666; }
+  .message .stats { font-size: 16px; color: #000; }
+  .message .btn { margin-top: 12px; min-width: 200px; }
+  .warn { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #666; }
+
+  .caption-under { font-size: 12px; color: #666; text-align: center; padding-bottom: 16px; letter-spacing: .02em; }
+</style>
+</head>
+<body>
+
+<h1>Flashcard Review — Mockups</h1>
+<div class="gallery-sub">Issues #2 (review screen) and #5 (audio) · tokens per design/design-system.md · black &amp; white only</div>
+
+<!-- ============================================================ -->
+<div class="state">
+  <h2>1 · Card front</h2>
+  <p>Spanish word only, speaker plays the word (#5). Whole card = reveal target. Hint text differs: mobile “tap to reveal”, web “Space to reveal”.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="card-center">
+              <div class="word">la ventana
+                <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              </div>
+            </div>
+            <div class="hint">tap to reveal</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="card-center">
+              <div class="word">la ventana
+                <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              </div>
+            </div>
+            <div class="hint">press space to reveal</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="state">
+  <h2>2 · Card back (revealed)</h2>
+  <p>Word stays on top (small, speaker keeps its place), hairline divider, translation, italic phrase with its own speaker. Grading row below the card: outline “Didn't know” left, solid “Knew it” right. Web shows shortcut captions. If the phrase column is empty, the phrase block is simply absent.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="word-small">la ventana
+              <span class="speaker sm"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+            </div>
+            <hr class="divider">
+            <div class="card-center" style="align-items:flex-start; gap:20px;">
+              <div class="translation">window</div>
+              <div class="phrase">
+                <span class="speaker sm"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+                Abre la ventana, por favor.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grades">
+          <div class="btn outline">Didn't know</div>
+          <div class="btn solid">Knew it</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="word-small">la ventana
+              <span class="speaker sm"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+            </div>
+            <hr class="divider">
+            <div class="card-center" style="align-items:flex-start; gap:20px;">
+              <div class="translation">window</div>
+              <div class="phrase">
+                <span class="speaker sm"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+                Abre la ventana, por favor.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="grades">
+          <div class="btn outline">Didn't know</div>
+          <div class="btn solid">Knew it</div>
+        </div>
+        <div class="keys"><span>1 or ←</span><span>2 or →</span></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="state">
+  <h2>3 · End of session</h2>
+  <p>Shown after the last due card is graded. One stats line, one action.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>Session complete</h3>
+            <div class="stats">23 reviewed · 19 knew · 4 didn't</div>
+            <div class="btn solid single" style="min-width:200px;">Done</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>Session complete</h3>
+            <div class="stats">23 reviewed · 19 knew · 4 didn't</div>
+            <div class="btn solid single" style="min-width:200px;">Done</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="state">
+  <h2>4 · Nothing due today (#3)</h2>
+  <p>App opened with zero due words. Next-due info in muted text; reviewing ahead is optional and secondary.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>Nothing due today</h3>
+            <p>12 words due tomorrow</p>
+            <div class="btn outline single" style="min-width:200px;">Review ahead</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>Nothing due today</h3>
+            <p>12 words due tomorrow</p>
+            <div class="btn outline single" style="min-width:200px;">Review ahead</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="state">
+  <h2>5 · Empty sheet (#1)</h2>
+  <p>No word rows in the Google Sheet yet. Point the learner to the sheet.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>No words yet</h3>
+            <p>Add words to your Google Sheet and they appear here.</p>
+            <div class="btn outline single" style="min-width:200px;">Open sheet</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>No words yet</h3>
+            <p>Add words to your Google Sheet and they appear here.</p>
+            <div class="btn outline single" style="min-width:200px;">Open sheet</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="state">
+  <h2>6 · Sync error banner (#4)</h2>
+  <p>A stat write failed. Banner pinned on top; review continues underneath, banner disappears on successful retry.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="banner">Couldn't save progress — retrying</div>
+        <div class="progress">
+          <div class="count">8 / 23</div>
+          <div class="bar"><div class="fill" style="width:35%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="card-center">
+              <div class="word">el bolígrafo
+                <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              </div>
+            </div>
+            <div class="hint">tap to reveal</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="banner">Couldn't save progress — retrying</div>
+        <div class="progress">
+          <div class="count">8 / 23</div>
+          <div class="bar"><div class="fill" style="width:35%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="card-center">
+              <div class="word">el bolígrafo
+                <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              </div>
+            </div>
+            <div class="hint">press space to reveal</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<div class="state">
+  <h2>7 · No Spanish voice (#5)</h2>
+  <p>Web Speech API has no es-* voice: speaker glyphs turn hairline-gray and inert; first tap shows a one-line caption. Review is unaffected.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="card-center">
+              <div class="word">la ventana
+                <span class="speaker disabled"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              </div>
+            </div>
+            <div class="hint">tap to reveal</div>
+          </div>
+        </div>
+        <div class="caption-under">No Spanish voice available on this device</div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
