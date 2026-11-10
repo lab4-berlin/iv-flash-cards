@@ -9,6 +9,7 @@ import * as auth from "./auth.js";
 import { loadWords, writeStats } from "./sheets.js";
 import { buildQueue, grade, requeue, nextDue } from "./scheduler.js";
 import { createWriteQueue } from "./queue.js";
+import * as speech from "./speech.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -38,6 +39,10 @@ const els = {
   nextDue: $("next-due"),
   doneStats: $("done-stats"),
   doneWarn: $("done-warn"),
+  speakWordFront: $("speak-word-front"),
+  speakWordBack: $("speak-word-back"),
+  speakPhrase: $("speak-phrase"),
+  voiceCaption: $("voice-caption"),
 };
 
 const MESSAGE_STATES = [
@@ -271,6 +276,41 @@ async function start() {
   }
   await loadAndBegin();
 }
+
+// --------------------------------------------------------------------- audio
+
+const speakerButtons = [els.speakWordFront, els.speakWordBack, els.speakPhrase];
+
+/** Hairline/inert vs active speaker buttons (design-system disabled state). */
+function updateSpeakers() {
+  const available = speech.isAvailable();
+  for (const button of speakerButtons) {
+    button.classList.toggle("disabled", !available);
+    button.setAttribute("aria-disabled", String(!available));
+  }
+  if (available) els.voiceCaption.hidden = true;
+}
+
+/**
+ * A speaker tap: eats the event (never reveals the card), speaks when a
+ * Spanish voice exists, otherwise shows the one-line muted caption (#5).
+ */
+function onSpeakerTap(event, getText) {
+  event.stopPropagation();
+  if (!session) return;
+  if (!speech.isAvailable()) {
+    els.voiceCaption.hidden = false;
+    return;
+  }
+  speech.speak(getText(session.queue[0]));
+}
+
+els.speakWordFront.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.word));
+els.speakWordBack.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.word));
+els.speakPhrase.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.example));
+
+speech.onVoicesChanged(updateSpeakers);
+updateSpeakers();
 
 // --------------------------------------------------------------------- wiring
 
