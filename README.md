@@ -35,3 +35,49 @@ tests on every push; on push to `main` it also deploys `site/` to GitHub Pages.
 
 `site/js/config.js` holds the (non-secret) Google OAuth client ID and the
 spreadsheet ID. Replace the placeholders to point the app at your own sheet.
+Both values come out of the one-time setup below.
+
+## One-time Google Cloud setup
+
+The app talks to the Google Sheets API directly from the browser
+(see [ADR-0001](docs/adr/0001-static-page-with-browser-oauth.md)), so it needs
+a Google Cloud project with an OAuth web client. These steps are done once,
+manually, in the [Google Cloud console](https://console.cloud.google.com/):
+
+1. **Create a project.** Top bar → project picker → **New project**. Name it
+   e.g. `iv-flash-cards`. No billing account is needed.
+2. **Enable the Sheets API.** **APIs & Services → Library**, search for
+   "Google Sheets API", open it, click **Enable**.
+3. **Configure the OAuth consent screen.** **APIs & Services → OAuth consent
+   screen** (in newer consoles: **Google Auth Platform → Branding**):
+   - User type: **External**.
+   - App name (e.g. "IV Flash Cards") and your email for both support and
+     developer contact.
+   - No scopes need to be added here; the app requests
+     `https://www.googleapis.com/auth/spreadsheets` at runtime.
+   - Leave the publishing status in **Testing** and add your own Google
+     account under **Test users** (Audience → Test users in newer consoles).
+4. **Create the OAuth client.** **APIs & Services → Credentials → Create
+   credentials → OAuth client ID**:
+   - Application type: **Web application**.
+   - Authorized JavaScript origins:
+     - `https://lab4-berlin.github.io` (the GitHub Pages origin)
+     - `http://localhost:8000` (local development)
+   - No authorized redirect URIs are needed (the GIS token client uses a
+     popup, not redirects).
+5. **Wire up the IDs in `site/js/config.js`:**
+   - Copy the client ID shown after step 4 (ends in
+     `.apps.googleusercontent.com`) into `CLIENT_ID`.
+   - Copy the spreadsheet ID — the long segment of the sheet's URL,
+     `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit` — into
+     `SPREADSHEET_ID`.
+
+Notes:
+
+- While the consent screen is in Testing mode, only the listed test users can
+  sign in, Google shows an "unverified app" warning during consent, and it may
+  occasionally re-prompt for consent. All acceptable for a single user
+  (ADR-0001).
+- The client ID and spreadsheet ID are identifiers, not secrets — checking
+  them into `config.js` is intentional. The sheet itself stays private behind
+  Google sign-in.
