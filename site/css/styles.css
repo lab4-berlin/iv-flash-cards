@@ -1,4 +1,6 @@
-/* Design tokens — see design/design-system.md */
+/* Styles per design/design-system.md and design/mockups/review.html.
+   Monochrome only: ink / paper / muted / hairline. No radii, no shadows. */
+
 :root {
   --ink: #000000;
   --paper: #ffffff;
@@ -12,6 +14,11 @@
   padding: 0;
 }
 
+/* `hidden` must win over the display values set by component classes. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   height: 100%;
@@ -23,54 +30,345 @@ body {
   color: var(--ink);
   background: var(--paper);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  border-radius: 0;
+}
+
+/* ---- banner (sync errors only) ---- */
+
+.banner {
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+}
+
+/* ---- progress ---- */
+
+.progress {
+  padding: 16px 16px 0;
+}
+
+.progress .count {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.bar {
+  height: 2px;
+  background: var(--hairline);
+}
+
+.bar .fill {
+  height: 2px;
+  background: var(--ink);
+  width: 0;
+}
+
+/* ---- stage + card ---- */
+
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
+  align-items: center;
   padding: 16px;
 }
 
-/* Placeholder card — same bones as the future review card */
 .card {
   background: var(--paper);
   border: 1px solid var(--ink);
   width: 100%;
-  max-width: 560px;
-  padding: 24px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
+  padding: 24px;
   min-height: 55vh;
-  text-align: center;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+
+.card.fading {
+  opacity: 0;
+}
+
+.card-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Back face wrapper must stretch so .back-content can center vertically. */
+#card-back {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.back-content {
+  align-items: flex-start;
+  gap: 20px;
 }
 
 .word {
   font-size: 36px;
+  font-weight: 600;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.word-small {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hint {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+.hint-web {
+  display: none;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--hairline);
+  margin: 16px 0;
+  width: 100%;
+}
+
+.translation {
+  font-size: 24px;
+  line-height: 1.3;
+}
+
+.phrase {
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.5;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+/* ---- speaker icon buttons ---- */
+
+.speaker {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.speaker svg {
+  width: 24px;
+  height: 24px;
+  fill: var(--ink);
+}
+
+.speaker.sm {
+  width: 32px;
+  height: 32px;
+}
+
+.speaker.sm svg {
+  width: 18px;
+  height: 18px;
+}
+
+.speaker.disabled {
+  cursor: default;
+}
+
+.speaker.disabled svg {
+  fill: var(--hairline);
+}
+
+/* ---- grading row ---- */
+
+.grades {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+}
+
+.btn {
+  flex: 1;
+  min-height: 48px;
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn.solid {
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+}
+
+.btn.outline {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.btn.single {
+  flex: none;
+  min-width: 200px;
+  padding: 0 24px;
+}
+
+.keys {
+  display: none;
+}
+
+/* ---- message states ---- */
+
+.message {
+  text-align: center;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.message h3 {
+  font-size: 24px;
   font-weight: 600;
 }
 
-.body {
+.message p {
   font-size: 16px;
   line-height: 1.5;
-  font-weight: 400;
-}
-
-.caption {
-  font-size: 12px;
-  line-height: 1.4;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--muted);
 }
 
+.message .stats {
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.message .btn {
+  margin-top: 12px;
+}
+
+.warn {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.caption-under {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding-bottom: 16px;
+  letter-spacing: 0.02em;
+}
+
+/* ---- web (>=768px) ---- */
+
 @media (min-width: 768px) {
+  .progress {
+    max-width: 560px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px 0 0;
+  }
+
   .card {
+    max-width: 560px;
     padding: 32px;
   }
 
   .word {
     font-size: 48px;
+  }
+
+  .translation {
+    font-size: 30px;
+  }
+
+  .phrase {
+    font-size: 19px;
+  }
+
+  .hint-mobile {
+    display: none;
+  }
+
+  .hint-web {
+    display: inline;
+  }
+
+  .grades {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 16px 0 8px;
+  }
+
+  .keys {
+    display: flex;
+    gap: 12px;
+    max-width: 560px;
+    margin: 0 auto;
+    width: 100%;
+    padding-bottom: 24px;
+  }
+
+  .keys span {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+  }
+}
+
+/* Motion is optional: the app must feel complete without animations. */
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
   }
 }

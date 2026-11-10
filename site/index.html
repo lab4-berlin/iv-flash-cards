@@ -5,66 +5,99 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IV Flash Cards</title>
   <link rel="stylesheet" href="css/styles.css" />
-  <style>
-    /* Primary button per design/design-system.md. Lives here until the
-       review UI task moves all component styles into css/styles.css. */
-    .button-primary {
-      background: var(--ink);
-      color: var(--paper);
-      border: none;
-      border-radius: 0;
-      min-height: 48px;
-      width: 100%;
-      max-width: 320px;
-      font-size: 16px;
-      font-weight: 600;
-      font-family: inherit;
-      cursor: pointer;
-      padding: 0 24px;
-    }
-  </style>
   <script src="https://accounts.google.com/gsi/client" async></script>
 </head>
 <body>
-  <main class="card">
-    <h1 class="word">IV Flash Cards</h1>
-    <p class="body">A personal Spanish vocabulary trainer.</p>
-    <button id="sign-in" class="button-primary" hidden>Sign in with Google</button>
-    <p id="auth-status" class="caption">Connecting&hellip;</p>
+  <!-- Sync-error banner (design: never blocks interaction) -->
+  <div id="banner" class="banner" hidden>Couldn't save progress &mdash; retrying</div>
+
+  <!-- Progress: caption counter + 2px bar, outside the card -->
+  <header id="progress" class="progress" hidden>
+    <div id="progress-count" class="count"></div>
+    <div class="bar"><div id="progress-fill" class="fill"></div></div>
+  </header>
+
+  <main class="stage">
+    <section id="state-loading" class="message" hidden>
+      <p>Loading&hellip;</p>
+    </section>
+
+    <section id="state-signin" class="message" hidden>
+      <h3>IV Flash Cards</h3>
+      <p id="signin-hint">Sign in to load your words.</p>
+      <button id="btn-signin" class="btn solid single" type="button">Sign in with Google</button>
+    </section>
+
+    <section id="state-error" class="message" hidden>
+      <h3>Couldn't load your words</h3>
+      <p>Check your connection and try again.</p>
+      <button id="btn-retry" class="btn solid single" type="button">Retry</button>
+    </section>
+
+    <section id="state-empty" class="message" hidden>
+      <h3>No words yet</h3>
+      <p>Add words to your Google Sheet and they appear here.</p>
+      <a id="link-sheet" class="btn outline single" target="_blank" rel="noopener">Open sheet</a>
+    </section>
+
+    <section id="state-nothing-due" class="message" hidden>
+      <h3>Nothing due today</h3>
+      <p id="next-due" hidden></p>
+    </section>
+
+    <section id="state-done" class="message" hidden>
+      <h3>Session complete</h3>
+      <div id="done-stats" class="stats"></div>
+      <p id="done-warn" class="warn" hidden></p>
+      <button id="btn-done" class="btn solid single" type="button">Done</button>
+    </section>
+
+    <article id="card" class="card" hidden>
+      <!-- Front: word + speaker only, whole card reveals -->
+      <div id="card-front" class="card-center">
+        <div class="word">
+          <span id="word-front"></span>
+          <button id="speak-word-front" class="speaker disabled" type="button" aria-label="Play word" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
+          </button>
+        </div>
+      </div>
+      <!-- Back: small word (speaker keeps its place), divider, translation, phrase -->
+      <div id="card-back" hidden>
+        <div class="word-small">
+          <span id="word-back"></span>
+          <button id="speak-word-back" class="speaker sm disabled" type="button" aria-label="Play word" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
+          </button>
+        </div>
+        <hr class="divider" />
+        <div class="card-center back-content">
+          <div id="translation" class="translation"></div>
+          <div id="phrase-row" class="phrase" hidden>
+            <button id="speak-phrase" class="speaker sm disabled" type="button" aria-label="Play phrase" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
+            </button>
+            <span id="phrase"></span>
+          </div>
+        </div>
+      </div>
+      <div id="hint" class="hint">
+        <span class="hint-mobile">tap to reveal</span>
+        <span class="hint-web">press space to reveal</span>
+      </div>
+    </article>
   </main>
+
+  <!-- Grading row: outline left, solid right — order never changes -->
+  <footer id="grades" class="grades" hidden>
+    <button id="btn-wrong" class="btn outline" type="button">Didn't know</button>
+    <button id="btn-right" class="btn solid" type="button">Knew it</button>
+  </footer>
+  <div id="keys" class="keys" hidden aria-hidden="true">
+    <span>1 or &larr;</span><span>2 or &rarr;</span>
+  </div>
+  <div id="voice-caption" class="caption-under" hidden>No Spanish voice available on this device</div>
+
   <script type="module" src="js/app.js"></script>
-  <script type="module">
-    // Temporary wiring for issue #12 — moves into js/app.js when the
-    // startup flow (auth → sheets → review UI) is implemented.
-    import { CLIENT_ID } from "./js/config.js";
-    import * as auth from "./js/auth.js";
-
-    const button = document.getElementById("sign-in");
-    const status = document.getElementById("auth-status");
-
-    button.addEventListener("click", async () => {
-      status.textContent = "Waiting for Google\u2026";
-      try {
-        await auth.requestToken(); // interactive popup (user gesture)
-      } catch {
-        status.textContent = "Sign-in failed \u2014 try again";
-      }
-    });
-
-    try {
-      await auth.init(CLIENT_ID);
-      // Returning browser with a live Google session: token without a popup.
-      await auth.requestToken({ silent: true });
-    } catch {
-      // Fresh browser (or silent refresh failed): fall through — the
-      // subscription below renders the signed-out state.
-    }
-
-    // Runs immediately with the current state, then on every change.
-    auth.onAuthChange((signedIn) => {
-      button.hidden = signedIn;
-      status.textContent = signedIn ? "Connected to Google" : "Not connected";
-    });
-  </script>
 </body>
 </html>
