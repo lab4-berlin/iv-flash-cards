@@ -5,13 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IV Flash Cards</title>
   <link rel="stylesheet" href="css/styles.css" />
+  <style>
+    /* Primary button per design/design-system.md. Lives here until the
+       review UI task moves all component styles into css/styles.css. */
+    .button-primary {
+      background: var(--ink);
+      color: var(--paper);
+      border: none;
+      border-radius: 0;
+      min-height: 48px;
+      width: 100%;
+      max-width: 320px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 0 24px;
+    }
+  </style>
+  <script src="https://accounts.google.com/gsi/client" async></script>
 </head>
 <body>
   <main class="card">
     <h1 class="word">IV Flash Cards</h1>
     <p class="body">A personal Spanish vocabulary trainer.</p>
-    <p class="caption">Coming soon</p>
+    <button id="sign-in" class="button-primary" hidden>Sign in with Google</button>
+    <p id="auth-status" class="caption">Connecting&hellip;</p>
   </main>
   <script type="module" src="js/app.js"></script>
+  <script type="module">
+    // Temporary wiring for issue #12 — moves into js/app.js when the
+    // startup flow (auth → sheets → review UI) is implemented.
+    import { CLIENT_ID } from "./js/config.js";
+    import * as auth from "./js/auth.js";
+
+    const button = document.getElementById("sign-in");
+    const status = document.getElementById("auth-status");
+
+    button.addEventListener("click", async () => {
+      status.textContent = "Waiting for Google\u2026";
+      try {
+        await auth.requestToken(); // interactive popup (user gesture)
+      } catch {
+        status.textContent = "Sign-in failed \u2014 try again";
+      }
+    });
+
+    try {
+      await auth.init(CLIENT_ID);
+      // Returning browser with a live Google session: token without a popup.
+      await auth.requestToken({ silent: true });
+    } catch {
+      // Fresh browser (or silent refresh failed): fall through — the
+      // subscription below renders the signed-out state.
+    }
+
+    // Runs immediately with the current state, then on every change.
+    auth.onAuthChange((signedIn) => {
+      button.hidden = signedIn;
+      status.textContent = signedIn ? "Connected to Google" : "Not connected";
+    });
+  </script>
 </body>
 </html>
