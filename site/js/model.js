@@ -79,6 +79,18 @@ export function wordToEnrichmentRow(word) {
 }
 
 /**
+ * First row number of an A1 range like `Words!A12:P12` → 12. The Sheets
+ * append response reports where the row landed via such a range; the import
+ * pipeline (#36) needs that row index for enrichment writes and clip names.
+ * @param {string|null|undefined} a1Range
+ * @returns {number|null} the 1-based row, or null when unparseable
+ */
+export function firstRowOfRange(a1Range) {
+  const match = /![A-Z]+(\d+)/.exec(a1Range ?? "");
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+/**
  * Map a Word to the full 16-element `A:P` array for appending a new row
  * (`values.append`). Nulls become empty cells.
  * @param {ReturnType<typeof rowToWord>} word
