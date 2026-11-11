@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockups — Word Import (issue #27)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F4F4F4; color: #000; padding: 40px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .gallery-sub { font-size: 13px; color: #666; margin-bottom: 40px; }
+  .state { margin-bottom: 56px; }
+  .state > h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .state > p { font-size: 13px; color: #666; margin-bottom: 16px; max-width: 720px; }
+  .frames { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .frame-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .phone, .desktop { border: 1px solid #000; background: #FFF; overflow: hidden; }
+  .phone { width: 375px; height: 640px; }
+  .desktop { width: 820px; height: 560px; }
+  .screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+  /* header */
+  .screen-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 16px; }
+  .screen-title { font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #666; }
+  .close { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; }
+
+  .content { flex: 1; display: flex; flex-direction: column; padding: 8px 16px 16px; gap: 12px; overflow: hidden; }
+  .desktop .content { max-width: 560px; width: 100%; margin: 0 auto; }
+
+  textarea, .fake-textarea { border: 1px solid #000; padding: 16px; font: 400 16px/1.5 inherit; font-family: inherit; min-height: 180px; resize: none; white-space: pre-line; }
+  .fake-textarea .ph { color: #666; }
+  .under-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .count-cap { font-size: 12px; color: #666; letter-spacing: .08em; }
+
+  .btn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0 20px; }
+  .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
+  .btn.outline { background: #FFF; color: #000; border: 1px solid #000; }
+  .btn.full { width: 100%; }
+  .btn.disabled { border-color: #DDD; color: #666; background: #FFF; }
+
+  /* progress component */
+  .progress { padding: 4px 0 0; }
+  .progress .count { font-size: 12px; font-weight: 500; letter-spacing: .08em; color: #666; margin-bottom: 8px; }
+  .bar { height: 2px; background: #DDD; }
+  .bar .fill { height: 2px; background: #000; }
+  .note { font-size: 12px; color: #666; letter-spacing: .02em; }
+
+  /* list rows */
+  .rows { flex: 1; overflow: hidden; }
+  .row { display: flex; align-items: center; justify-content: space-between; min-height: 48px; border-bottom: 1px solid #DDD; gap: 12px; }
+  .row .w { font-size: 16px; }
+  .row.pending .w { color: #666; }
+  .row .st { font-size: 14px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .row .st .cap { font-size: 12px; color: #666; letter-spacing: .02em; }
+  .glyph { font-size: 16px; }
+  .glyph.muted { color: #666; }
+
+  /* results */
+  .headline { font-size: 24px; font-weight: 600; }
+  .sub { font-size: 16px; color: #666; }
+  .res-row { padding: 12px 0; border-bottom: 1px solid #DDD; }
+  .res-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .res-top .w { font-size: 16px; font-weight: 600; }
+  .res-top .t { font-size: 16px; color: #666; }
+  .res-phrase { font-size: 15px; font-style: italic; margin-top: 6px; display: flex; align-items: center; gap: 8px; }
+  .speaker { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .speaker svg { width: 18px; height: 18px; fill: #000; }
+  .group-cap { font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #666; margin-top: 8px; }
+  .actions { display: flex; gap: 12px; }
+  .actions .btn { flex: 1; }
+  .sheet-link { font-size: 12px; color: #666; letter-spacing: .08em; text-align: center; text-decoration: underline; padding: 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>Word Import — Mockups (issue #27)</h1>
+<div class="gallery-sub">Three steps: add words → batch progress → results review · spec: design/word-import.md</div>
+
+<!-- ============ STEP 1 ============ -->
+<div class="state">
+  <h2>1 · Add words</h2>
+  <p>Paste is the primary path; "Upload .txt" appends file lines into the same text area. Live unique-word count. Generate disabled at 0 words.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">✕</span></div>
+        <div class="content">
+          <div class="fake-textarea">la ventana
+el bolígrafo
+caminar
+rápido
+la mesa
+correr</div>
+          <div class="under-row">
+            <div class="btn outline">Upload .txt</div>
+            <span class="count-cap">6 WORDS</span>
+          </div>
+          <div style="flex:1"></div>
+          <div class="btn solid full">Generate 6 words</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">✕</span></div>
+        <div class="content">
+          <div class="fake-textarea" style="min-height:240px"><span class="ph">One Spanish word per line</span></div>
+          <div class="under-row">
+            <div class="btn outline">Upload .txt</div>
+            <span class="count-cap">0 WORDS</span>
+          </div>
+          <div style="flex:1"></div>
+          <div class="btn disabled full">Generate</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STEP 2 ============ -->
+<div class="state">
+  <h2>2 · Progress</h2>
+  <p>One word at a time, appended to the sheet as it completes. Row statuses: ✓ done, "generating…", muted pending, ✕ failed (batch continues), — skipped duplicate. Cancel keeps completed words.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">✕</span></div>
+        <div class="content">
+          <div class="progress">
+            <div class="count">3 / 6</div>
+            <div class="bar"><div class="fill" style="width:50%"></div></div>
+          </div>
+          <div class="note">about 10 seconds per word · you can leave this open in the background</div>
+          <div class="rows">
+            <div class="row"><span class="w">la ventana</span><span class="st"><span class="glyph">✓</span></span></div>
+            <div class="row"><span class="w">el bolígrafo</span><span class="st"><span class="glyph">✓</span></span></div>
+            <div class="row"><span class="w">la mesa</span><span class="st"><span class="glyph muted">—</span><span class="cap">already in list</span></span></div>
+            <div class="row"><span class="w">caminar</span><span class="st"><span class="cap">generating…</span></span></div>
+            <div class="row pending"><span class="w">rápido</span></div>
+            <div class="row pending"><span class="w">correr</span></div>
+          </div>
+          <div class="btn outline full">Cancel</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">✕</span></div>
+        <div class="content">
+          <div class="progress">
+            <div class="count">3 / 6</div>
+            <div class="bar"><div class="fill" style="width:50%"></div></div>
+          </div>
+          <div class="note">about 10 seconds per word · you can leave this open in the background</div>
+          <div class="rows">
+            <div class="row"><span class="w">la ventana</span><span class="st"><span class="glyph">✓</span></span></div>
+            <div class="row"><span class="w">el bolígrafo</span><span class="st"><span class="glyph">✓</span></span></div>
+            <div class="row"><span class="w">la mesa</span><span class="st"><span class="glyph muted">—</span><span class="cap">already in list</span></span></div>
+            <div class="row"><span class="w">caminar</span><span class="st"><span class="cap">generating…</span></span></div>
+            <div class="row pending"><span class="w">rápido</span></div>
+          </div>
+          <div class="btn outline" style="width:200px; margin:0 auto;">Cancel</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ STEP 3 ============ -->
+<div class="state">
+  <h2>3 · Results</h2>
+  <p>Added words show their generated translation and phrase (with a speaker to audition it). Failures are retryable; edits happen in the sheet via the link.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">✕</span></div>
+        <div class="content">
+          <div class="headline">4 added</div>
+          <div class="sub">1 skipped · 1 failed</div>
+          <div class="rows" style="overflow:hidden">
+            <div class="res-row">
+              <div class="res-top"><span class="w">la ventana</span><span class="t">window</span></div>
+              <div class="res-phrase"><span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>Abre la ventana, por favor.</div>
+            </div>
+            <div class="res-row">
+              <div class="res-top"><span class="w">el bolígrafo</span><span class="t">pen</span></div>
+              <div class="res-phrase"><span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>Escribo con el bolígrafo en la mesa.</div>
+            </div>
+            <div class="group-cap">Failed</div>
+            <div class="row"><span class="w">correr</span><span class="st"><span class="glyph">✕</span><span class="cap">audio failed</span></span></div>
+          </div>
+          <div class="actions">
+            <div class="btn outline">Done</div>
+            <div class="btn solid">Retry 1 failed</div>
+          </div>
+          <div class="sheet-link">Open sheet to edit</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">✕</span></div>
+        <div class="content">
+          <div class="headline">4 added</div>
+          <div class="sub">1 skipped · 1 failed</div>
+          <div class="rows" style="overflow:hidden">
+            <div class="res-row">
+              <div class="res-top"><span class="w">la ventana</span><span class="t">window</span></div>
+              <div class="res-phrase"><span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>Abre la ventana, por favor.</div>
+            </div>
+            <div class="group-cap">Failed</div>
+            <div class="row"><span class="w">correr</span><span class="st"><span class="glyph">✕</span><span class="cap">audio failed</span></span></div>
+          </div>
+          <div class="actions" style="max-width:400px">
+            <div class="btn outline">Done</div>
+            <div class="btn solid">Retry 1 failed</div>
+          </div>
+          <div class="sheet-link">Open sheet to edit</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ERROR ============ -->
+<div class="state">
+  <h2>4 · Generator unreachable</h2>
+  <p>Whole-batch failure before any word succeeds (API key / auth / network). Input is preserved behind "Back".</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">✕</span></div>
+        <div class="content" style="justify-content:center; align-items:center; text-align:center;">
+          <div class="headline">Couldn't reach the generator</div>
+          <div class="sub">Check your connection and API key, then try again.</div>
+          <div class="btn solid" style="min-width:200px; margin-top:12px;">Retry</div>
+          <div class="btn outline" style="min-width:200px;">Back</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

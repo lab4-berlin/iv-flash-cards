@@ -27,6 +27,21 @@ interface; everything else stays out of the way.
 Nothing else. Disabled controls use `hairline` for border/icon and `muted`
 for any label.
 
+### Inverted mode (listening screen only)
+
+The hands-free listening screen (#29) inverts the palette so it is glanceable
+in the dark (car, evening walk) while staying monochrome:
+
+| Token           | Value     | Replaces   |
+|-----------------|-----------|------------|
+| `ink-inv`       | `#FFFFFF` | `ink`      |
+| `paper-inv`     | `#000000` | `paper`    |
+| `muted-inv`     | `#999999` | `muted`    |
+| `hairline-inv`  | `#333333` | `hairline` |
+
+Inversion applies to the whole screen, never to a single component. No other
+screen may use it.
+
 ## Typography
 
 System font stack everywhere — no webfonts:
@@ -75,6 +90,31 @@ this device").
 ### Progress
 A `caption` counter ("7 / 23") plus a 2px-high bar: `hairline` track,
 `ink` fill. Lives at the top of the screen, outside the card.
+
+### Text area (import)
+`1px solid ink` border, sharp corners, 16px body text, 16px padding, min
+height 8 lines. Placeholder in `muted`. Focus state: border stays `ink`,
+2px instead of 1px (no color change, no glow).
+
+### List row (import progress / results)
+Full-width row, 48px min height, hairline divider between rows. Left: the
+word in body text. Right: a status glyph + optional `muted` caption. Status
+glyphs are text-sized, monochrome:
+
+| Glyph | Meaning |
+|-------|---------|
+| `✓` (ink) | done / added |
+| `✕` (ink) | failed |
+| `—` (muted) | skipped (with caption, e.g. "already in list") |
+| "generating…" (muted caption, no glyph) | in progress |
+| word itself in `muted` | pending, not yet started |
+
+### Large controls (listening screen only)
+Driver-safe sizes, inverted palette: primary play/pause is a 96×96px solid
+`ink-inv` square with a `paper-inv` glyph; next-word is a 72×72px
+`1px solid ink-inv` outline square. Glyphs are plain geometric SVG
+(triangle, two bars, triangle+bar). Nothing on this screen may have a hit
+area under 48px.
 
 ### Banner (errors / sync)
 Full-width strip pinned to the top, `ink` background, `paper` caption text.

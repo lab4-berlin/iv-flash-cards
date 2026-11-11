@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockups — Home Screen</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F4F4F4; color: #000; padding: 40px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .gallery-sub { font-size: 13px; color: #666; margin-bottom: 40px; }
+  .state { margin-bottom: 56px; }
+  .state > h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .state > p { font-size: 13px; color: #666; margin-bottom: 16px; max-width: 720px; }
+  .frames { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .frame-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .phone, .desktop { border: 1px solid #000; background: #FFF; overflow: hidden; }
+  .phone { width: 375px; height: 640px; }
+  .desktop { width: 820px; height: 560px; }
+  .screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+  .stage { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 16px; }
+  .message { text-align: center; max-width: 360px; display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; }
+  .message h3 { font-size: 24px; font-weight: 600; }
+  .message p { font-size: 16px; line-height: 1.5; color: #666; }
+  .menu { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 20px; }
+  .desktop .menu { width: 280px; }
+  .btn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
+  .btn.outline { background: #FFF; color: #000; border: 1px solid #000; }
+  .keys { font-size: 12px; color: #666; letter-spacing: .08em; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Home Screen — Mockups</h1>
+<div class="gallery-sub">New top-level screen for the V2 milestone · entry points for Review (#2), Listen (#29), Import (#27) · spec: design/home-screen.md</div>
+
+<div class="state">
+  <h2>1 · Default (words due)</h2>
+  <p>Sign-in lands here instead of auto-starting review. Review is the solid action. Web shows keyboard shortcuts.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>14 due · 87 words</p>
+            <div class="menu">
+              <div class="btn solid">Review</div>
+              <div class="btn outline">Listen</div>
+              <div class="btn outline">Import words</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>14 due · 87 words</p>
+            <div class="menu">
+              <div class="btn solid">Review</div>
+              <div class="btn outline">Listen</div>
+              <div class="btn outline">Import words</div>
+            </div>
+            <div class="keys">enter · L · I</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<div class="state">
+  <h2>2 · Nothing due</h2>
+  <p>When 0 words are due, Listen becomes the solid button and Review turns into outline "Review ahead".</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>Nothing due · next 12 tomorrow</p>
+            <div class="menu">
+              <div class="btn solid">Listen</div>
+              <div class="btn outline">Review ahead</div>
+              <div class="btn outline">Import words</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>Nothing due · next 12 tomorrow</p>
+            <div class="menu">
+              <div class="btn solid">Listen</div>
+              <div class="btn outline">Review ahead</div>
+              <div class="btn outline">Import words</div>
+            </div>
+            <div class="keys">enter · L · I</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<div class="state">
+  <h2>3 · Empty sheet</h2>
+  <p>Import is now the primary fix for an empty vocabulary; opening the sheet stays as secondary.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>No words yet</h3>
+            <p>Import a word list or add rows to your Google Sheet.</p>
+            <div class="menu">
+              <div class="btn solid">Import words</div>
+              <div class="btn outline">Open sheet</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
