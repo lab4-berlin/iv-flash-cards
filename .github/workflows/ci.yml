@@ -33,6 +33,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Generate site/js/config.js from repository secrets
+        env:
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: |
+          if [ -z "$CLIENT_ID" ] || [ -z "$SPREADSHEET_ID" ]; then
+            echo "::error::Repository secret CLIENT_ID and/or SPREADSHEET_ID is missing or empty. Set both under Settings -> Secrets and variables -> Actions. Refusing to deploy a placeholder config.js."
+            exit 1
+          fi
+          cat > site/js/config.js <<EOF
+          // Generated at deploy time from GitHub Actions secrets — do not edit.
+          export const CLIENT_ID = "$CLIENT_ID";
+          export const SPREADSHEET_ID = "$SPREADSHEET_ID";
+          EOF
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/

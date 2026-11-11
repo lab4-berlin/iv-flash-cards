@@ -33,9 +33,24 @@ tests on every push; on push to `main` it also deploys `site/` to GitHub Pages.
 
 ## Configuration
 
-`site/js/config.js` holds the (non-secret) Google OAuth client ID and the
-spreadsheet ID. Replace the placeholders to point the app at your own sheet.
-Both values come out of the one-time setup below.
+`site/js/config.js` holds the Google OAuth client ID and the spreadsheet ID.
+It is **not** checked in (gitignored); both values come out of the one-time
+setup below.
+
+- **Local development:** copy the example and fill in your values:
+
+  ```sh
+  cp site/js/config.example.js site/js/config.js
+  ```
+
+- **Production (GitHub Pages):** the deploy job generates `config.js` from
+  the `CLIENT_ID` and `SPREADSHEET_ID` repository secrets (GitHub repo
+  **Settings → Secrets and variables → Actions**). If either secret is
+  missing, the deploy fails instead of publishing a placeholder config.
+
+Both values stay visible in the deployed page's JS — the browser needs them.
+They are identifiers, not secrets; the only goal is keeping them out of the
+public source (issue #24).
 
 ## One-time Google Cloud setup
 
@@ -65,12 +80,14 @@ manually, in the [Google Cloud console](https://console.cloud.google.com/):
      - `http://localhost:8000` (local development)
    - No authorized redirect URIs are needed (the GIS token client uses a
      popup, not redirects).
-5. **Wire up the IDs in `site/js/config.js`:**
-   - Copy the client ID shown after step 4 (ends in
-     `.apps.googleusercontent.com`) into `CLIENT_ID`.
-   - Copy the spreadsheet ID — the long segment of the sheet's URL,
-     `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit` — into
-     `SPREADSHEET_ID`.
+5. **Wire up the IDs** (see [Configuration](#configuration)):
+   - The client ID shown after step 4 (ends in `.apps.googleusercontent.com`)
+     goes into `CLIENT_ID` in your local `config.js` and into the
+     `CLIENT_ID` repository secret.
+   - The spreadsheet ID — the long segment of the sheet's URL,
+     `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit` — goes
+     into `SPREADSHEET_ID` in your local `config.js` and into the
+     `SPREADSHEET_ID` repository secret.
 
 Notes:
 
@@ -78,6 +95,6 @@ Notes:
   sign in, Google shows an "unverified app" warning during consent, and it may
   occasionally re-prompt for consent. All acceptable for a single user
   (ADR-0001).
-- The client ID and spreadsheet ID are identifiers, not secrets — checking
-  them into `config.js` is intentional. The sheet itself stays private behind
-  Google sign-in.
+- The client ID and spreadsheet ID are identifiers, not secrets — they are
+  visible in the deployed page's JS by design; they're only kept out of the
+  repo source. The sheet itself stays private behind Google sign-in.

@@ -1,0 +1,3 @@
+# Real config lives only locally (copy of site/js/config.example.js) or is
+# generated at deploy time from GitHub Actions secrets (issue #24).
+site/js/config.js
