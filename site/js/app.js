@@ -1,13 +1,22 @@
-// Review session state machine (issue #15). Wires auth, sheets, scheduler
-// and the write-back queue into the UI designed in design/flashcard-review.md.
+// App shell: home screen + navigation (issue #42) around the review session
+// state machine (issue #15). Wires auth, sheets, scheduler and the
+// write-back queue into the UI designed in design/home-screen.md and
+// design/flashcard-review.md.
 //
-// States: loading → signin? → (empty | nothing-due | reviewing) → done;
-// error screen on startup read failure; sync banner driven by the queue.
+// States: loading → signin? → (empty | home) → reviewing → done → home;
+// Listen/Import route to a placeholder until #41/#37 land. Error screen on
+// startup read failure; sync banner driven by the queue.
 
 import { CLIENT_ID, SPREADSHEET_ID } from "./config.js";
 import * as auth from "./auth.js";
 import { loadWords, writeStats } from "./sheets.js";
-import { buildQueue, grade, requeue, nextDue } from "./scheduler.js";
+import {
+  buildQueue,
+  buildAheadQueue,
+  grade,
+  requeue,
+  nextDue,
+} from "./scheduler.js";
 import { createWriteQueue } from "./queue.js";
 import * as speech from "./speech.js";
 
@@ -35,8 +44,19 @@ const els = {
   signinHint: $("signin-hint"),
   btnRetry: $("btn-retry"),
   btnDone: $("btn-done"),
+  btnClose: $("btn-close"),
   linkSheet: $("link-sheet"),
-  nextDue: $("next-due"),
+  homeStatus: $("home-status"),
+  btnReview: $("btn-review"),
+  btnListen: $("btn-listen"),
+  btnImport: $("btn-import"),
+  btnImportEmpty: $("btn-import-empty"),
+  modeCards: $("mode-cards"),
+  modeChoices: $("mode-choices"),
+  modeCaption: $("mode-caption"),
+  soonTitle: $("soon-title"),
+  soonText: $("soon-text"),
+  btnSoonBack: $("btn-soon-back"),
   doneStats: $("done-stats"),
   doneWarn: $("done-warn"),
   speakWordFront: $("speak-word-front"),
@@ -49,15 +69,18 @@ const MESSAGE_STATES = [
   "state-loading",
   "state-signin",
   "state-error",
+  "state-home",
+  "state-soon",
   "state-empty",
-  "state-nothing-due",
   "state-done",
 ];
 
 const FADE_MS = 150;
 
+let words = []; // the loaded vocabulary; grading mutates its entries
 let session = null; // { queue, today, knew, didnt }
 let revealed = false;
+let currentState = null; // the visible MESSAGE_STATES id, or "card"
 
 // ---------------------------------------------------------- write-back queue
 
@@ -105,6 +128,7 @@ function localTomorrow() {
 
 /** Show one screen; everything else (incl. the card chrome) follows. */
 function showState(name) {
+  currentState = name;
   for (const id of MESSAGE_STATES) $(id).hidden = id !== name;
   els.card.hidden = name !== "card";
   els.progress.hidden = name !== "card";
@@ -179,17 +203,122 @@ function showDone() {
   showState("state-done");
 }
 
-function renderNothingDue(words, today) {
-  const info = nextDue(words, today);
-  if (!info) {
-    els.nextDue.hidden = true;
-  } else {
-    const noun = info.count === 1 ? "word" : "words";
-    const when = info.date === localTomorrow() ? "tomorrow" : `on ${info.date}`;
-    els.nextDue.textContent = `${info.count} ${noun} due ${when}`;
-    els.nextDue.hidden = false;
+// ------------------------------------------------- home (design/home-screen.md)
+
+/**
+ * Home status line: "N due · M words", or in the nothing-due state
+ * "Nothing due · next 12 tomorrow" (date form when it isn't tomorrow).
+ */
+function homeStatusText(dueCount, today) {
+  if (dueCount > 0) {
+    const noun = words.length === 1 ? "word" : "words";
+    return `${dueCount} due · ${words.length} ${noun}`;
   }
-  showState("state-nothing-due");
+  const info = nextDue(words, today);
+  if (!info) return "Nothing due";
+  const when = info.date === localTomorrow() ? "tomorrow" : `on ${info.date}`;
+  return `Nothing due · next ${info.count} ${when}`;
+}
+
+/**
+ * Render Home from the current (locally graded) word list. In the
+ * nothing-due state the Review row becomes outline "Review ahead" and
+ * Listen becomes the solid button; order never changes (spec).
+ */
+function showHome() {
+  session = null;
+  const today = localToday();
+  const dueCount = buildQueue(words, today).length;
+  const nothingDue = dueCount === 0;
+
+  els.homeStatus.textContent = homeStatusText(dueCount, today);
+  els.btnReview.textContent = nothingDue ? "Review ahead" : "Review";
+  els.btnReview.classList.toggle("solid", !nothingDue);
+  els.btnReview.classList.toggle("outline", nothingDue);
+  els.btnListen.classList.toggle("solid", nothingDue);
+  els.btnListen.classList.toggle("outline", !nothingDue);
+  renderModePicker();
+  showState("state-home");
+}
+
+/** Placeholder screen until Listen (#41) and Import (#37) are built. */
+const SOON = {
+  listen: { title: "Listen", text: "Hands-free listening is coming soon." },
+  import: { title: "Import words", text: "Word import is coming soon." },
+};
+
+function showSoon(which) {
+  els.soonTitle.textContent = SOON[which].title;
+  els.soonText.textContent = SOON[which].text;
+  showState("state-soon");
+}
+
+// ------------------------------------------- review-mode picker (issue #31)
+
+// Starting a Choices session is issue #31's scope; until it lands the cell
+// is always disabled (with a "soon" caption when the pool would allow it).
+const CHOICES_IMPLEMENTED = false;
+
+const MODE_KEY = "iv-review-mode";
+let reviewMode = localStorage.getItem(MODE_KEY) === "choices" ? "choices" : "cards";
+
+/** Choices needs ≥4 words with distinct translations (multiple-choice.md). */
+function choicesPoolOk() {
+  const distinct = new Set(
+    words.map((word) => word.translation).filter(Boolean)
+  );
+  return distinct.size >= 4;
+}
+
+function setMode(mode) {
+  reviewMode = mode;
+  localStorage.setItem(MODE_KEY, mode);
+  renderModePicker();
+}
+
+function renderModePicker() {
+  const poolOk = choicesPoolOk();
+  const choicesEnabled = CHOICES_IMPLEMENTED && poolOk;
+  if (!choicesEnabled && reviewMode === "choices") {
+    reviewMode = "cards";
+    localStorage.setItem(MODE_KEY, "cards");
+  }
+
+  els.modeCards.classList.toggle("selected", reviewMode === "cards");
+  els.modeChoices.classList.toggle("selected", reviewMode === "choices");
+  els.modeCards.setAttribute("aria-checked", String(reviewMode === "cards"));
+  els.modeChoices.setAttribute("aria-checked", String(reviewMode === "choices"));
+  els.modeChoices.classList.toggle("disabled", !choicesEnabled);
+  els.modeChoices.setAttribute("aria-disabled", String(!choicesEnabled));
+
+  els.modeCaption.hidden = choicesEnabled;
+  els.modeCaption.textContent = poolOk
+    ? "Choices mode is coming soon"
+    : "Choices needs at least 4 words";
+}
+
+function toggleMode() {
+  const choicesEnabled = CHOICES_IMPLEMENTED && choicesPoolOk();
+  if (reviewMode === "cards" && !choicesEnabled) return;
+  setMode(reviewMode === "cards" ? "choices" : "cards");
+}
+
+// ------------------------------------------------------------ session start
+
+/**
+ * Start a review session from Home: the due queue, or — when nothing is
+ * due — the review-ahead queue (issue #42). Grading ahead-of-schedule
+ * words uses the normal rules.
+ */
+function startReview() {
+  const today = localToday();
+  let queue = buildQueue(words, today);
+  if (queue.length === 0) queue = buildAheadQueue(words, today);
+  if (queue.length === 0) return; // unreachable while Home requires words
+
+  session = { queue, today, knew: 0, didnt: 0 };
+  renderCard();
+  showState("card");
 }
 
 // ------------------------------------------------------------------- grading
@@ -224,9 +353,9 @@ function onGrade(knewIt) {
 
 // -------------------------------------------------------------------- startup
 
+/** Load the sheet and land on Home (or the empty/signin/error states). */
 async function loadAndBegin() {
   showState("state-loading");
-  let words;
   try {
     words = await loadWords(auth.getToken());
   } catch (error) {
@@ -246,16 +375,7 @@ async function loadAndBegin() {
     return;
   }
 
-  const today = localToday();
-  const due = buildQueue(words, today);
-  if (due.length === 0) {
-    renderNothingDue(words, today);
-    return;
-  }
-
-  session = { queue: due, today, knew: 0, didnt: 0 };
-  renderCard();
-  showState("card");
+  showHome();
 }
 
 async function start() {
@@ -323,7 +443,25 @@ els.card.addEventListener("click", () => {
 els.btnWrong.addEventListener("click", () => onGrade(false));
 els.btnRight.addEventListener("click", () => onGrade(true));
 els.btnRetry.addEventListener("click", () => loadAndBegin());
-els.btnDone.addEventListener("click", () => loadAndBegin());
+els.btnDone.addEventListener("click", () => loadAndBegin()); // refetch, lands Home
+
+// Home navigation (issue #42). ✕ abandons the current card ungraded; words
+// already graded this session keep their (optimistically written) state.
+els.btnClose.addEventListener("click", () => showHome());
+els.btnReview.addEventListener("click", () => startReview());
+els.btnListen.addEventListener("click", () => showSoon("listen"));
+els.btnImport.addEventListener("click", () => showSoon("import"));
+els.btnImportEmpty.addEventListener("click", () => showSoon("import"));
+els.btnSoonBack.addEventListener("click", () => {
+  // The empty state also links here; Home needs words to make sense.
+  if (words.length === 0) showState("state-empty");
+  else showHome();
+});
+
+els.modeCards.addEventListener("click", () => setMode("cards"));
+els.modeChoices.addEventListener("click", () => {
+  if (CHOICES_IMPLEMENTED && choicesPoolOk()) setMode("choices");
+});
 
 els.btnSignin.addEventListener("click", async () => {
   try {
@@ -335,6 +473,25 @@ els.btnSignin.addEventListener("click", async () => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+  // Home: Enter/Space = Review, L = Listen, I = Import, M = toggle mode.
+  if (currentState === "state-home") {
+    if (event.key === "Enter" || event.key === " ") {
+      // A focused button/link activates natively — don't double-fire.
+      if (document.activeElement?.closest("button, a")) return;
+      event.preventDefault(); // don't scroll
+      startReview();
+      return;
+    }
+    const key = event.key.toLowerCase();
+    if (key === "l") showSoon("listen");
+    else if (key === "i") showSoon("import");
+    else if (key === "m") toggleMode();
+    return;
+  }
+
+  // Review session: Space = reveal, 1/← and 2/→ = grade.
   if (!session) return;
   if (event.key === " ") {
     event.preventDefault(); // don't scroll

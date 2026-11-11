@@ -11,10 +11,13 @@
   <!-- Sync-error banner (design: never blocks interaction) -->
   <div id="banner" class="banner" hidden>Couldn't save progress &mdash; retrying</div>
 
-  <!-- Progress: caption counter + 2px bar, outside the card -->
+  <!-- Progress: close (✕, back to Home) + caption counter + 2px bar, outside the card -->
   <header id="progress" class="progress" hidden>
-    <div id="progress-count" class="count"></div>
-    <div class="bar"><div id="progress-fill" class="fill"></div></div>
+    <button id="btn-close" class="close" type="button" aria-label="Back to home">&#10005;</button>
+    <div class="progress-body">
+      <div id="progress-count" class="count"></div>
+      <div class="bar"><div id="progress-fill" class="fill"></div></div>
+    </div>
   </header>
 
   <main class="stage">
@@ -34,15 +37,40 @@
       <button id="btn-retry" class="btn solid single" type="button">Retry</button>
     </section>
 
-    <section id="state-empty" class="message" hidden>
-      <h3>No words yet</h3>
-      <p>Add words to your Google Sheet and they appear here.</p>
-      <a id="link-sheet" class="btn outline single" target="_blank" rel="noopener">Open sheet</a>
+    <!-- Home: wordmark, status line, stacked actions (design/home-screen.md) -->
+    <section id="state-home" class="message" hidden>
+      <h3>IV Flash Cards</h3>
+      <p id="home-status"></p>
+      <div class="menu">
+        <button id="btn-review" class="btn solid" type="button">Review</button>
+        <!-- Review-mode picker (issue #31): persisted, Choices disabled until the mode lands -->
+        <div class="mode">
+          <div id="mode-picker" class="segmented" role="radiogroup" aria-label="Review mode">
+            <button id="mode-cards" class="seg-cell" type="button" role="radio">Cards</button>
+            <button id="mode-choices" class="seg-cell" type="button" role="radio">Choices</button>
+          </div>
+          <div id="mode-caption" class="seg-caption" hidden></div>
+        </div>
+        <button id="btn-listen" class="btn outline" type="button">Listen</button>
+        <button id="btn-import" class="btn outline" type="button">Import words</button>
+      </div>
+      <div class="home-keys">enter &middot; L &middot; I &middot; M</div>
     </section>
 
-    <section id="state-nothing-due" class="message" hidden>
-      <h3>Nothing due today</h3>
-      <p id="next-due" hidden></p>
+    <!-- Placeholder until Listen (#41) and Import (#37) land -->
+    <section id="state-soon" class="message" hidden>
+      <h3 id="soon-title"></h3>
+      <p id="soon-text"></p>
+      <button id="btn-soon-back" class="btn outline single" type="button">Back</button>
+    </section>
+
+    <section id="state-empty" class="message" hidden>
+      <h3>No words yet</h3>
+      <p>Import a word list or add rows to your Google Sheet.</p>
+      <div class="menu">
+        <button id="btn-import-empty" class="btn solid" type="button">Import words</button>
+        <a id="link-sheet" class="btn outline" target="_blank" rel="noopener">Open sheet</a>
+      </div>
     </section>
 
     <section id="state-done" class="message" hidden>

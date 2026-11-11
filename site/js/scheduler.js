@@ -72,6 +72,23 @@ export function buildQueue(words, today) {
 }
 
 /**
+ * Build the "Review ahead" queue for the nothing-due home state (issue #42):
+ * all *non-due* words, soonest due first (due date ascending), ties broken
+ * by `dateAdded` ascending. Grading these words uses the normal rules —
+ * an early review just reschedules from the current interval. Returns a
+ * new array.
+ */
+export function buildAheadQueue(words, today) {
+  return words
+    .filter((word) => !isDue(word, today))
+    .sort((a, b) => {
+      const byDue = a.dueDate.localeCompare(b.dueDate);
+      if (byDue !== 0) return byDue;
+      return (a.dateAdded ?? "").localeCompare(b.dateAdded ?? "");
+    });
+}
+
+/**
  * Re-queue a failed card at the end of the current session queue
  * (ADR-0002 rule 3). Returns a new array; does not mutate `queue`.
  */

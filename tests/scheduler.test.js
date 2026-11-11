@@ -7,6 +7,7 @@ import {
   grade,
   isDue,
   buildQueue,
+  buildAheadQueue,
   requeue,
   nextDue,
 } from "../site/js/scheduler.js";
@@ -141,6 +142,73 @@ describe("buildQueue", () => {
       { id: "a", dueDate: TODAY, dateAdded: "2026-10-01" },
     ];
     buildQueue(words, TODAY);
+    assert.deepEqual(
+      words.map((w) => w.id),
+      ["b", "a"]
+    );
+  });
+});
+
+describe("buildAheadQueue", () => {
+  test("includes only non-due words, soonest due first", () => {
+    const words = [
+      { id: "later", dueDate: "2026-12-01", dateAdded: "2026-10-01" },
+      { id: "due-today", dueDate: TODAY, dateAdded: "2026-10-01" },
+      { id: "soon", dueDate: "2026-11-12", dateAdded: "2026-10-01" },
+      { id: "overdue", dueDate: "2026-11-01", dateAdded: "2026-10-01" },
+    ];
+    assert.deepEqual(
+      buildAheadQueue(words, TODAY).map((w) => w.id),
+      ["soon", "later"]
+    );
+  });
+
+  test("excludes never-reviewed words — they are due, not ahead", () => {
+    const words = [
+      { id: "new", dateAdded: "2026-10-01" },
+      { id: "blank", dueDate: "", dateAdded: "2026-10-01" },
+      { id: "ahead", dueDate: "2026-11-20", dateAdded: "2026-10-01" },
+    ];
+    assert.deepEqual(
+      buildAheadQueue(words, TODAY).map((w) => w.id),
+      ["ahead"]
+    );
+  });
+
+  test("ties on due date are broken by dateAdded ascending", () => {
+    const words = [
+      { id: "b", dueDate: "2026-11-15", dateAdded: "2026-10-05" },
+      { id: "a", dueDate: "2026-11-15", dateAdded: "2026-10-01" },
+    ];
+    assert.deepEqual(
+      buildAheadQueue(words, TODAY).map((w) => w.id),
+      ["a", "b"]
+    );
+  });
+
+  test("empty when every word is due or the list is empty", () => {
+    assert.deepEqual(buildAheadQueue([{ dueDate: TODAY }, {}], TODAY), []);
+    assert.deepEqual(buildAheadQueue([], TODAY), []);
+  });
+
+  test("complements buildQueue: every word lands in exactly one queue", () => {
+    const words = [
+      { id: "overdue", dueDate: "2026-11-01", dateAdded: "2026-10-01" },
+      { id: "new", dateAdded: "2026-10-01" },
+      { id: "ahead", dueDate: "2026-11-20", dateAdded: "2026-10-01" },
+    ];
+    const due = buildQueue(words, TODAY).map((w) => w.id);
+    const ahead = buildAheadQueue(words, TODAY).map((w) => w.id);
+    assert.equal(due.length + ahead.length, words.length);
+    assert.deepEqual(new Set([...due, ...ahead]).size, words.length);
+  });
+
+  test("does not mutate the input array", () => {
+    const words = [
+      { id: "b", dueDate: "2026-11-20", dateAdded: "2026-10-05" },
+      { id: "a", dueDate: "2026-11-15", dateAdded: "2026-10-01" },
+    ];
+    buildAheadQueue(words, TODAY);
     assert.deepEqual(
       words.map((w) => w.id),
       ["b", "a"]
