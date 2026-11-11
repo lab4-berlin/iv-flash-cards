@@ -51,13 +51,35 @@ button {
   padding: 10px 16px;
 }
 
-/* ---- progress ---- */
+/* ---- progress (with ✕ back to Home, issue #42) ---- */
 
 .progress {
-  padding: 16px 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px 0;
 }
 
-.progress .count {
+.progress-body {
+  flex: 1;
+}
+
+.close {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 20px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.progress-body .count {
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.08em;
@@ -260,6 +282,70 @@ button {
   display: none;
 }
 
+/* ---- home (design/home-screen.md) ---- */
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-top: 20px;
+}
+
+/* Specificity beats the later `.message .btn` margin rule. */
+.message .menu .btn {
+  width: 100%;
+  margin-top: 0; /* the .menu gap, not .message .btn, spaces these */
+}
+
+/* Segmented control (design-system.md): mode picker under Review */
+
+.mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--ink);
+  height: 48px;
+}
+
+.seg-cell {
+  flex: 1;
+  background: var(--paper);
+  color: var(--ink);
+  border: none;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seg-cell + .seg-cell {
+  border-left: 1px solid var(--hairline);
+}
+
+.seg-cell.selected {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.seg-cell.disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.seg-caption {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.home-keys {
+  display: none; /* web only — see media query */
+}
+
 /* ---- message states ---- */
 
 .message {
@@ -332,6 +418,20 @@ button {
 
   .phrase {
     font-size: 19px;
+  }
+
+  .menu {
+    width: 280px;
+  }
+
+  .home-keys {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 8px;
   }
 
   .hint-mobile {
