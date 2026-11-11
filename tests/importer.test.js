@@ -339,6 +339,26 @@ describe("run (pipeline glue)", () => {
     assert.deepEqual(log.enriched[1].vocabulary, ["casa", "perro"]);
   });
 
+  test("shouldStop cancels between words: current word finishes, rest stay pending", async () => {
+    const { importer, log } = stubImporter();
+    let stop = false;
+    const { items, summary } = await importer.run(
+      "uno\ndos\ntres",
+      [],
+      (snapshot) => {
+        // Cancel while the first word is mid-pipeline — it must complete.
+        if (snapshot[0].state === "enriching") stop = true;
+      },
+      () => stop,
+    );
+    assert.equal(items[0].state, "done");
+    assert.equal(items[1].state, "pending");
+    assert.equal(items[2].state, "pending");
+    assert.equal(summary.imported, 1);
+    assert.equal(summary.inProgress, 2);
+    assert.equal(log.enriched.length, 1); // never touched the later words
+  });
+
   test("onProgress sees every state change with fresh snapshots", async () => {
     const { importer } = stubImporter();
     const seen = [];

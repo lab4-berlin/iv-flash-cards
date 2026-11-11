@@ -139,9 +139,10 @@ Save. Restrictions can take a minute or two to propagate.
 
 ### 3. Enter it in the app
 
-Paste the key into the app's key prompt. The app validates it with one
+Open **Import words** from the home screen — when no key is saved on the
+device it asks for one before the word list. The app validates it with one
 cheap API call and tells you right away whether it works, distinguishing a
 rejected key (typo, revoked, or restrictions that don't match the origin)
-from a network problem. The key stays on that device until you clear it in
-the app (or clear the site's browser data); a new device or browser needs
-the key pasted again.
+from a network problem. The key stays on that device until you remove it
+via **Change API key** on the import screen (or clear the site's browser
+data); a new device or browser needs the key pasted again.
