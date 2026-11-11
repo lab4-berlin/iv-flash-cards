@@ -26,7 +26,10 @@ for the reasoning behind each decision.
 | Data store | Google Sheets API v4 | Single sheet, single worksheet `Words` |
 | Scheduler | Pure JS module | Interval-ladder spaced repetition (ADR-0002) |
 | Persistence | Pure JS module + localStorage | Immediate row writes, pending queue (ADR-0003) |
-| Audio | Web Speech API (`speechSynthesis`) | Spanish TTS for word + phrase (#5) |
+| Audio (fallback) | Web Speech API (`speechSynthesis`) | Spanish TTS when no stored clip exists (#5, #28) |
+| AI enrichment (V2) | Gemini API, user-supplied restricted key (ADR-0004) | Translation, example phrase, phrase translation (#27) |
+| Speech synthesis (V2) | Gemini TTS, 6-voice random pool (ADR-0004) | Natural clips: es word/phrase, en word/phrase translations (#27) |
+| Audio storage (V2) | Google Drive, `drive.file` scope (ADR-0005) | Stores clips; sheet references them by file ID (#27–#29) |
 
 ## Repository layout
 
@@ -68,7 +71,20 @@ design/               # Nick's artifacts
 | J | `interval_days` | app | integer, 0 = new/just failed |
 | K | `due_date` | app | `YYYY-MM-DD`, empty = never reviewed = due |
 
-The app only ever writes columns `F:K`. Empty app columns mean "new word".
+V2 (#27) extends the sheet with enrichment columns:
+
+| Col | Header | Owner | Notes |
+|---|---|---|---|
+| L | `phrase_translation` | app (user may edit) | English translation of the example phrase |
+| M | `audio_word_es` | app | Drive file ID, clip of the Spanish word |
+| N | `audio_phrase_es` | app | Drive file ID, clip of the Spanish phrase |
+| O | `audio_word_en` | app | Drive file ID, clip of the word translation |
+| P | `audio_phrase_en` | app | Drive file ID, clip of the phrase translation |
+
+Review grading only ever writes `F:K` (ADR-0003); import appends whole rows
+at the bottom (`values.append`); enrichment/backfill writes `L:P`. An empty
+audio cell means "missing — generate on next backfill" (ADR-0005), so rows
+added by hand stay valid and a cleared cell requests regeneration.
 Full spec with example rows: `docs/sheet-template.md`.
 
 ## Data flow
@@ -99,6 +115,33 @@ Full spec with example rows: `docs/sheet-template.md`.
   deploy `site/` to GitHub Pages.
 - **Local dev:** any static server (`python3 -m http.server 8000`);
   `localhost:8000` is an authorized OAuth origin.
+
+## V2: bulk import pipeline (#27, ADR-0004/0005)
+
+New modules, same no-build vanilla-JS rules:
+
+```
+site/js/
+  apikey.js      # Gemini key entry/validation, localStorage persistence
+  gemini.js      # text enrichment: prompt building + JSON response parsing
+  tts.js         # Gemini TTS synthesis + WAV wrapping
+  voices.js      # the 6-voice pool (3m + 3f), random pick per clip
+  drive.js       # ensure folder, upload clip, fetch clip as blob
+  importer.js    # batch orchestrator (pure core + glue)
+```
+
+Per imported word the orchestrator runs two phases, isolated per word so one
+failure never aborts the batch (#27 acceptance):
+
+1. **Text:** dedupe against the loaded vocabulary (normalized compare) →
+   Gemini enrichment (prompt includes the current word list to bias phrases
+   toward known vocabulary) → append row with `A:L` filled.
+2. **Audio:** synthesize 4 clips (random voice each) → upload to Drive →
+   write `L:P` file IDs. Partial audio failure leaves cells empty; retrying
+   is the same operation as the #28 backfill ("fill whatever is missing").
+
+Pacing: words are processed sequentially with backoff on 429s — free-tier
+rate limits, not throughput, are the constraint.
 
 ## Out of scope for MVP (kept possible)
 
