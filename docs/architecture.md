@@ -143,6 +143,19 @@ failure never aborts the batch (#27 acceptance):
 Pacing: words are processed sequentially with backoff on 429s — free-tier
 rate limits, not throughput, are the constraint.
 
+## V2: hands-free listening (#29, ADR-0006)
+
+```
+site/js/
+  playlist.js    # pure: eligible-word filter, shuffle, cue sequencing
+  stitcher.js    # pure PCM math: concat clips + silence gaps → WAV block
+  player.js      # <audio> element, block chaining, prefetch, MediaSession
+```
+
+Blocks of ~10 minutes are stitched client-side from the Drive-stored PCM
+clips and played by one `<audio>` element; MediaSession supplies lock-screen
+and headphone controls. Platform limits are contractual, see ADR-0006.
+
 ## Out of scope for MVP (kept possible)
 
 - Mobile app (#9): would consume the same sheet; a future API layer could be
