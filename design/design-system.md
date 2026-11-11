@@ -109,6 +109,25 @@ glyphs are text-sized, monochrome:
 | "generating…" (muted caption, no glyph) | in progress |
 | word itself in `muted` | pending, not yet started |
 
+### Segmented control
+A row of equal-width cells, `1px solid ink` outer border, hairline dividers
+between cells, 48px height, button typography. Selected cell: solid `ink`
+with `paper` text. Disabled cell: `hairline` border/divider, `muted` text,
+non-interactive — with a persistent `muted` caption below the control
+explaining why. Used for the review-mode picker on Home.
+
+### Option button (multiple-choice mode)
+Metrics of the standard button (48px min height, 16px/600), outline style,
+stacked with 12px gaps. Feedback states after an answer:
+
+| State | Treatment |
+|-------|-----------|
+| Correct (always revealed) | solid `ink`, `paper` text, `✓ ` prefix |
+| Picked wrong | outline, `✕ ` prefix, label struck through |
+| Not picked, not correct | `hairline` border, `muted` text |
+
+All options are inert once answered.
+
 ### Large controls (listening screen only)
 Driver-safe sizes, inverted palette: primary play/pause is a 96×96px solid
 `ink-inv` square with a `paper-inv` glyph; next-word is a 72×72px

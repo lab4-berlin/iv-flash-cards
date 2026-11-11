@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockups — Multiple-Choice Mode (issue #31)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F4F4F4; color: #000; padding: 40px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .gallery-sub { font-size: 13px; color: #666; margin-bottom: 40px; }
+  .state { margin-bottom: 56px; }
+  .state > h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .state > p { font-size: 13px; color: #666; margin-bottom: 16px; max-width: 720px; }
+  .frames { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .frame-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .phone, .desktop { border: 1px solid #000; background: #FFF; overflow: hidden; }
+  .phone { width: 375px; height: 700px; }
+  .desktop { width: 820px; height: 620px; }
+  .screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+  /* progress */
+  .progress { padding: 16px 16px 0; }
+  .desktop .progress { max-width: 560px; width: 100%; margin: 0 auto; padding: 24px 0 0; }
+  .progress .count { font-size: 12px; font-weight: 500; letter-spacing: .08em; color: #666; margin-bottom: 8px; }
+  .bar { height: 2px; background: #DDD; }
+  .bar .fill { height: 2px; background: #000; }
+
+  .stage { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 16px; gap: 16px; }
+  .desktop .stage > * { max-width: 560px; width: 100%; }
+  .card { background: #FFF; border: 1px solid #000; width: 100%; padding: 24px; }
+  .desktop .card { padding: 32px; }
+  .word { font-size: 36px; font-weight: 600; line-height: 1.2; display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .desktop .word { font-size: 48px; }
+  .divider { border: none; border-top: 1px solid #DDD; margin: 20px 0 16px; }
+  .phrase { font-size: 17px; font-style: italic; line-height: 1.5; display: flex; gap: 10px; align-items: flex-start; justify-content: center; }
+  .speaker { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .speaker svg { width: 24px; height: 24px; fill: #000; }
+  .speaker.sm { width: 32px; height: 32px; }
+  .speaker.sm svg { width: 18px; height: 18px; }
+
+  .options { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+  .opt { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #000; background: #FFF; color: #000; cursor: pointer; position: relative; }
+  .opt .key { position: absolute; left: 16px; font-size: 12px; font-weight: 500; color: #666; }
+  .opt.correct { background: #000; color: #FFF; border-color: #000; }
+  .opt.correct .key { color: #FFF; }
+  .opt.wrong .label { text-decoration: line-through; }
+  .opt.faded { border-color: #DDD; color: #666; font-weight: 400; }
+  .opt.faded .key { color: #DDD; }
+
+  .btn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; width: 100%; }
+  .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
+
+  /* home with segmented control */
+  .message { text-align: center; max-width: 360px; display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; }
+  .message h3 { font-size: 24px; font-weight: 600; }
+  .message p { font-size: 16px; line-height: 1.5; color: #666; }
+  .menu { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 20px; }
+  .desktop .menu { width: 280px; }
+  .mbtn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .mbtn.solid { background: #000; color: #FFF; border: 1px solid #000; }
+  .mbtn.outline { background: #FFF; color: #000; border: 1px solid #000; }
+  .seg { display: flex; border: 1px solid #000; height: 48px; }
+  .seg .cell { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; cursor: pointer; }
+  .seg .cell + .cell { border-left: 1px solid #000; }
+  .seg .cell.sel { background: #000; color: #FFF; }
+  .seg.disabled-right { border-color: #000; }
+  .seg.disabled-right .cell + .cell { border-left-color: #DDD; color: #666; font-weight: 400; cursor: default; }
+  .seg-cap { font-size: 12px; color: #666; letter-spacing: .02em; margin-top: -4px; }
+  .keys { font-size: 12px; color: #666; letter-spacing: .08em; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Multiple-Choice Mode — Mockups (issue #31)</h1>
+<div class="gallery-sub">Mode picker on Home · question · correct / wrong feedback · unavailable state · spec: design/multiple-choice.md</div>
+
+<!-- ============ MODE PICKER ============ -->
+<div class="state">
+  <h2>1 · Mode picker on Home</h2>
+  <p>Segmented control under the Review button: "Cards" (classic) | "Choices". Selection is remembered; Review starts the session in the selected mode. Same placement under "Review ahead" when nothing is due.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>14 due · 87 words</p>
+            <div class="menu">
+              <div class="mbtn solid">Review</div>
+              <div class="seg"><div class="cell">Cards</div><div class="cell sel">Choices</div></div>
+              <div class="mbtn outline">Listen</div>
+              <div class="mbtn outline">Import words</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>14 due · 87 words</p>
+            <div class="menu">
+              <div class="mbtn solid">Review</div>
+              <div class="seg"><div class="cell">Cards</div><div class="cell sel">Choices</div></div>
+              <div class="mbtn outline">Listen</div>
+              <div class="mbtn outline">Import words</div>
+            </div>
+            <div class="keys">enter · M · L · I</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ QUESTION ============ -->
+<div class="state">
+  <h2>2 · Question</h2>
+  <p>Content-height card with the word + speaker; 4 outline options below, randomized. Web shows 1–4 shortcut digits at the options' left edge. The card is not tappable in this mode.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="word">la ventana
+              <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+            </div>
+          </div>
+          <div class="options">
+            <div class="opt"><span class="label">table</span></div>
+            <div class="opt"><span class="label">window</span></div>
+            <div class="opt"><span class="label">pen</span></div>
+            <div class="opt"><span class="label">to run</span></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="word">la ventana
+              <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+            </div>
+          </div>
+          <div class="options">
+            <div class="opt"><span class="key">1</span><span class="label">table</span></div>
+            <div class="opt"><span class="key">2</span><span class="label">window</span></div>
+            <div class="opt"><span class="key">3</span><span class="label">pen</span></div>
+            <div class="opt"><span class="key">4</span><span class="label">to run</span></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CORRECT ============ -->
+<div class="state">
+  <h2>3 · Answered — correct</h2>
+  <p>Picked option turns solid with ✓; the others fade to hairline/muted. The card expands with the phrase (like the classic back). Next advances; tapping the card does too.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="word">la ventana
+              <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+            </div>
+            <hr class="divider">
+            <div class="phrase">
+              <span class="speaker sm"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              Abre la ventana, por favor.
+            </div>
+          </div>
+          <div class="options">
+            <div class="opt faded"><span class="label">table</span></div>
+            <div class="opt correct"><span class="label">✓ window</span></div>
+            <div class="opt faded"><span class="label">pen</span></div>
+            <div class="opt faded"><span class="label">to run</span></div>
+          </div>
+          <div class="btn solid">Next</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="word">la ventana
+              <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+            </div>
+            <hr class="divider">
+            <div class="phrase">
+              <span class="speaker sm"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              Abre la ventana, por favor.
+            </div>
+          </div>
+          <div class="options">
+            <div class="opt faded"><span class="label">table</span></div>
+            <div class="opt correct"><span class="label">✓ window</span></div>
+            <div class="opt faded"><span class="label">pen</span></div>
+            <div class="opt faded"><span class="label">to run</span></div>
+          </div>
+          <div class="btn solid">Next</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ WRONG ============ -->
+<div class="state">
+  <h2>4 · Answered — wrong</h2>
+  <p>Picked option gets ✕ and strikethrough; the correct one is revealed solid with ✓; the rest fade. Recorded as "Didn't know" — the word re-queues in this session like classic mode.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="progress">
+          <div class="count">7 / 23</div>
+          <div class="bar"><div class="fill" style="width:30%"></div></div>
+        </div>
+        <div class="stage">
+          <div class="card">
+            <div class="word">la ventana
+              <span class="speaker"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+            </div>
+            <hr class="divider">
+            <div class="phrase">
+              <span class="speaker sm"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></span>
+              Abre la ventana, por favor.
+            </div>
+          </div>
+          <div class="options">
+            <div class="opt wrong"><span class="label">✕ table</span></div>
+            <div class="opt correct"><span class="label">✓ window</span></div>
+            <div class="opt faded"><span class="label">pen</span></div>
+            <div class="opt faded"><span class="label">to run</span></div>
+          </div>
+          <div class="btn solid">Next</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ UNAVAILABLE ============ -->
+<div class="state">
+  <h2>5 · Mode unavailable (fewer than 4 words)</h2>
+  <p>"Choices" cell disabled (hairline divider, muted text) with a persistent caption. Classic review unaffected.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>3 due · 3 words</p>
+            <div class="menu">
+              <div class="mbtn solid">Review</div>
+              <div class="seg disabled-right"><div class="cell sel">Cards</div><div class="cell">Choices</div></div>
+              <div class="seg-cap">Choices needs at least 4 words</div>
+              <div class="mbtn outline">Listen</div>
+              <div class="mbtn outline">Import words</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

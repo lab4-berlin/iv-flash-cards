@@ -45,8 +45,18 @@ end-of-session screen also returns Home.
 | Nothing due | 0 due | Status line: "Nothing due · next 12 tomorrow". Review row becomes outline "Review ahead"; **Listen becomes the solid button** (it's the natural thing to do when nothing is due). |
 | Empty sheet | no words | Existing empty state (#1 design) shown instead of buttons, plus outline "Import words" — import is now the primary fix for an empty sheet, "Open sheet" stays as secondary. |
 
+## Review-mode picker (issue #31)
+
+A segmented control ("Cards" | "Choices") sits directly under the Review
+button (or "Review ahead" in the nothing-due state) and selects the mode
+the next session starts in. Selection is remembered across sessions
+(default "Cards"). With fewer than 4 words with distinct translations the
+"Choices" cell is disabled with a persistent muted caption "Choices needs
+at least 4 words". Full spec: `multiple-choice.md`; component:
+design-system "Segmented control".
+
 ## Keyboard (web)
 
 - `Enter` or `Space` — start Review (the solid action).
-- `L` — Listen, `I` — Import. Shortcuts printed in muted caption under the
-  buttons, web only.
+- `L` — Listen, `I` — Import, `M` — toggle review mode. Shortcuts printed
+  in muted caption under the buttons, web only.
