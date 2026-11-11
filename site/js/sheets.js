@@ -10,6 +10,7 @@ import {
   wordToStatsRow,
   wordToEnrichmentRow,
   wordToNewRow,
+  firstRowOfRange,
 } from "./model.js";
 
 const API_BASE = "https://sheets.googleapis.com/v4/spreadsheets";
@@ -88,16 +89,20 @@ export async function writeStats(token, word) {
  * indices (ADR-0005).
  * @param {string} token OAuth access token
  * @param {object[]} words Word objects (see model.js)
+ * @returns {Promise<number|null>} 1-based sheet row of the first appended
+ *   word (from the API's `updatedRange`) — the import pipeline (#36) needs
+ *   it for enrichment writes and clip filenames
  * @throws {SheetsAuthError} on 401, {SheetsError} on other API failures
  */
 export async function appendWords(token, words) {
   const range = encodeURIComponent(`Words!A${FIRST_DATA_ROW}:P`);
-  await request(
+  const data = await request(
     token,
     "POST",
     `${range}:append?insertDataOption=INSERT_ROWS&valueInputOption=RAW`,
     { values: words.map(wordToNewRow) },
   );
+  return firstRowOfRange(data.updates?.updatedRange);
 }
 
 /**

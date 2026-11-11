@@ -6,6 +6,7 @@ import {
   wordToStatsRow,
   wordToEnrichmentRow,
   wordToNewRow,
+  firstRowOfRange,
 } from "../site/js/model.js";
 
 // Pre-V2 11-column row (A:K) — what sheets created before the enrichment
@@ -163,4 +164,17 @@ test("round-trip: new word with only A:E set survives append and re-read", () =>
   const original = rowToWord(["correr", "to run", "", "2026-11-10", "es"], 9);
   const rereadRow = wordToNewRow(original).map(String);
   assert.deepEqual(rowToWord(rereadRow, 9), original);
+});
+
+test("firstRowOfRange parses the append response's updatedRange", () => {
+  assert.equal(firstRowOfRange("Words!A12:P12"), 12);
+  assert.equal(firstRowOfRange("'My Words'!AB3:AC4"), 3);
+  assert.equal(firstRowOfRange("Words!A2"), 2);
+});
+
+test("firstRowOfRange is null on unparseable input", () => {
+  assert.equal(firstRowOfRange(null), null);
+  assert.equal(firstRowOfRange(undefined), null);
+  assert.equal(firstRowOfRange(""), null);
+  assert.equal(firstRowOfRange("Words"), null);
 });
