@@ -44,7 +44,7 @@ setup below.
   ```
 
 - **Production (GitHub Pages):** the deploy job generates `config.js` from
-  the `CLIENT_ID` and `SPREADSHEET_ID` repository secrets (GitHub repo
+  the `OAUTH_CLIENT_ID` and `SPREADSHEET_ID` repository secrets (GitHub repo
   **Settings → Secrets and variables → Actions**). If either secret is
   missing, the deploy fails instead of publishing a placeholder config.
 
@@ -83,7 +83,7 @@ manually, in the [Google Cloud console](https://console.cloud.google.com/):
 5. **Wire up the IDs** (see [Configuration](#configuration)):
    - The client ID shown after step 4 (ends in `.apps.googleusercontent.com`)
      goes into `CLIENT_ID` in your local `config.js` and into the
-     `CLIENT_ID` repository secret.
+     `OAUTH_CLIENT_ID` repository secret.
    - The spreadsheet ID — the long segment of the sheet's URL,
      `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit` — goes
      into `SPREADSHEET_ID` in your local `config.js` and into the
