@@ -9,7 +9,12 @@
 // the "Reconnect" state to the user, whose click triggers an interactive
 // `requestToken()`.
 
-const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+// drive.file (ADR-0005) is the narrowest Drive scope: the app can only see
+// and touch files it created. Adding it triggers a one-time re-consent.
+const SCOPE = [
+  "https://www.googleapis.com/auth/spreadsheets",
+  "https://www.googleapis.com/auth/drive.file",
+].join(" ");
 const GIS_SRC = "https://accounts.google.com/gsi/client";
 
 // Refresh this many ms before the token's real expiry so callers never

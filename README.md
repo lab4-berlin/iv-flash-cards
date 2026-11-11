@@ -61,15 +61,18 @@ manually, in the [Google Cloud console](https://console.cloud.google.com/):
 
 1. **Create a project.** Top bar → project picker → **New project**. Name it
    e.g. `iv-flash-cards`. No billing account is needed.
-2. **Enable the Sheets API.** **APIs & Services → Library**, search for
-   "Google Sheets API", open it, click **Enable**.
+2. **Enable the APIs.** **APIs & Services → Library**, search for
+   "Google Sheets API", open it, click **Enable**. Repeat for
+   "Google Drive API" (used to store audio clips, see
+   [ADR-0005](docs/adr/0005-audio-clips-in-google-drive.md)).
 3. **Configure the OAuth consent screen.** **APIs & Services → OAuth consent
    screen** (in newer consoles: **Google Auth Platform → Branding**):
    - User type: **External**.
    - App name (e.g. "IV Flash Cards") and your email for both support and
      developer contact.
    - No scopes need to be added here; the app requests
-     `https://www.googleapis.com/auth/spreadsheets` at runtime.
+     `https://www.googleapis.com/auth/spreadsheets` and
+     `https://www.googleapis.com/auth/drive.file` at runtime.
    - Leave the publishing status in **Testing** and add your own Google
      account under **Test users** (Audience → Test users in newer consoles).
 4. **Create the OAuth client.** **APIs & Services → Credentials → Create
