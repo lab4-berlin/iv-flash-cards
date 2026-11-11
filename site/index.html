@@ -109,11 +109,32 @@
           </div>
         </div>
       </div>
+      <!-- Choices mode (issue #31): the card expands like the classic back —
+           divider + phrase — once an option is picked -->
+      <div id="choice-back" hidden>
+        <hr class="divider" />
+        <div class="phrase">
+          <button id="speak-phrase-choice" class="speaker sm disabled" type="button" aria-label="Play phrase">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>
+          </button>
+          <span id="phrase-choice"></span>
+        </div>
+      </div>
       <div id="hint" class="hint">
         <span class="hint-mobile">tap to reveal</span>
         <span class="hint-web">press space to reveal</span>
       </div>
     </article>
+
+    <!-- Multiple-choice options + Next (issue #31): 1 correct + 3 distractors,
+         randomized; digit shortcuts are shown on web only (CSS) -->
+    <div id="options" class="options" hidden>
+      <button class="opt" type="button"><span class="key">1</span><span class="label"></span></button>
+      <button class="opt" type="button"><span class="key">2</span><span class="label"></span></button>
+      <button class="opt" type="button"><span class="key">3</span><span class="label"></span></button>
+      <button class="opt" type="button"><span class="key">4</span><span class="label"></span></button>
+    </div>
+    <button id="btn-next" class="btn solid next" type="button" hidden>Next</button>
   </main>
 
   <!-- Grading row: outline left, solid right — order never changes -->

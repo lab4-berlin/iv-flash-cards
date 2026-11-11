@@ -18,6 +18,7 @@ import {
   nextDue,
 } from "./scheduler.js";
 import { createWriteQueue } from "./queue.js";
+import { choicesAvailable, buildQuestion } from "./distractors.js";
 import * as speech from "./speech.js";
 
 const $ = (id) => document.getElementById(id);
@@ -59,11 +60,18 @@ const els = {
   btnSoonBack: $("btn-soon-back"),
   doneStats: $("done-stats"),
   doneWarn: $("done-warn"),
+  choiceBack: $("choice-back"),
+  phraseChoice: $("phrase-choice"),
+  options: $("options"),
+  btnNext: $("btn-next"),
   speakWordFront: $("speak-word-front"),
   speakWordBack: $("speak-word-back"),
   speakPhrase: $("speak-phrase"),
+  speakPhraseChoice: $("speak-phrase-choice"),
   voiceCaption: $("voice-caption"),
 };
+
+const optionButtons = [...els.options.querySelectorAll(".opt")];
 
 const MESSAGE_STATES = [
   "state-loading",
@@ -78,8 +86,10 @@ const MESSAGE_STATES = [
 const FADE_MS = 150;
 
 let words = []; // the loaded vocabulary; grading mutates its entries
-let session = null; // { queue, today, knew, didnt }
-let revealed = false;
+let session = null; // { queue, today, knew, didnt, mode: "cards" | "choices" }
+let revealed = false; // classic: back face shown
+let question = null; // choices: { word, options, correctIndex }
+let answered = false; // choices: an option was picked
 let currentState = null; // the visible MESSAGE_STATES id, or "card"
 
 // ---------------------------------------------------------- write-back queue
@@ -135,6 +145,8 @@ function showState(name) {
   if (name !== "card") {
     els.grades.hidden = true;
     els.keys.hidden = true;
+    els.options.hidden = true;
+    els.btnNext.hidden = true;
   }
 }
 
@@ -156,7 +168,7 @@ function renderProgress() {
   els.progressFill.style.width = `${(graded / total) * 100}%`;
 }
 
-/** Render the front of the current card. */
+/** Render the front of the current card (classic mode). */
 function renderCard() {
   const word = session.queue[0];
   revealed = false;
@@ -167,10 +179,41 @@ function renderCard() {
   els.phrase.textContent = word.example ?? "";
   els.cardFront.hidden = false;
   els.cardBack.hidden = true;
+  els.choiceBack.hidden = true;
   els.hint.hidden = false;
   els.grades.hidden = true;
   els.keys.hidden = true;
+  els.options.hidden = true;
+  els.btnNext.hidden = true;
+  els.card.classList.remove("choices", "answered");
   els.card.style.cursor = "pointer";
+  renderProgress();
+}
+
+/** Render the current multiple-choice question (design/multiple-choice.md). */
+function renderChoice() {
+  const word = session.queue[0];
+  answered = false;
+  // Availability is checked at session start and the vocabulary doesn't
+  // change mid-session, so a question always exists here.
+  question = { word, ...buildQuestion(words, word, Math.random) };
+  els.wordFront.textContent = word.word;
+  els.cardFront.hidden = false;
+  els.cardBack.hidden = true;
+  els.choiceBack.hidden = true;
+  els.hint.hidden = true;
+  els.grades.hidden = true;
+  els.keys.hidden = true;
+  els.card.classList.add("choices");
+  els.card.classList.remove("answered");
+  els.card.style.cursor = "default"; // the card is not tappable pre-answer
+  for (const [i, button] of optionButtons.entries()) {
+    button.classList.remove("correct", "wrong", "faded");
+    button.disabled = false;
+    button.querySelector(".label").textContent = question.options[i];
+  }
+  els.options.hidden = false;
+  els.btnNext.hidden = true;
   renderProgress();
 }
 
@@ -255,20 +298,8 @@ function showSoon(which) {
 
 // ------------------------------------------- review-mode picker (issue #31)
 
-// Starting a Choices session is issue #31's scope; until it lands the cell
-// is always disabled (with a "soon" caption when the pool would allow it).
-const CHOICES_IMPLEMENTED = false;
-
 const MODE_KEY = "iv-review-mode";
 let reviewMode = localStorage.getItem(MODE_KEY) === "choices" ? "choices" : "cards";
-
-/** Choices needs ≥4 words with distinct translations (multiple-choice.md). */
-function choicesPoolOk() {
-  const distinct = new Set(
-    words.map((word) => word.translation).filter(Boolean)
-  );
-  return distinct.size >= 4;
-}
 
 function setMode(mode) {
   reviewMode = mode;
@@ -277,9 +308,8 @@ function setMode(mode) {
 }
 
 function renderModePicker() {
-  const poolOk = choicesPoolOk();
-  const choicesEnabled = CHOICES_IMPLEMENTED && poolOk;
-  if (!choicesEnabled && reviewMode === "choices") {
+  const available = choicesAvailable(words);
+  if (!available && reviewMode === "choices") {
     reviewMode = "cards";
     localStorage.setItem(MODE_KEY, "cards");
   }
@@ -288,18 +318,15 @@ function renderModePicker() {
   els.modeChoices.classList.toggle("selected", reviewMode === "choices");
   els.modeCards.setAttribute("aria-checked", String(reviewMode === "cards"));
   els.modeChoices.setAttribute("aria-checked", String(reviewMode === "choices"));
-  els.modeChoices.classList.toggle("disabled", !choicesEnabled);
-  els.modeChoices.setAttribute("aria-disabled", String(!choicesEnabled));
+  els.modeChoices.classList.toggle("disabled", !available);
+  els.modeChoices.setAttribute("aria-disabled", String(!available));
 
-  els.modeCaption.hidden = choicesEnabled;
-  els.modeCaption.textContent = poolOk
-    ? "Choices mode is coming soon"
-    : "Choices needs at least 4 words";
+  els.modeCaption.hidden = available;
+  els.modeCaption.textContent = "Choices needs at least 4 words";
 }
 
 function toggleMode() {
-  const choicesEnabled = CHOICES_IMPLEMENTED && choicesPoolOk();
-  if (reviewMode === "cards" && !choicesEnabled) return;
+  if (reviewMode === "cards" && !choicesAvailable(words)) return;
   setMode(reviewMode === "cards" ? "choices" : "cards");
 }
 
@@ -316,18 +343,22 @@ function startReview() {
   if (queue.length === 0) queue = buildAheadQueue(words, today);
   if (queue.length === 0) return; // unreachable while Home requires words
 
-  session = { queue, today, knew: 0, didnt: 0 };
-  renderCard();
+  // One mode per session (issue #31) — picked on Home, fixed here.
+  session = { queue, today, knew: 0, didnt: 0, mode: reviewMode };
+  if (session.mode === "choices") renderChoice();
+  else renderCard();
   showState("card");
 }
 
 // ------------------------------------------------------------------- grading
 
-function onGrade(knewIt) {
-  if (!session || !revealed) return;
+/**
+ * Record a grade: scheduling + stats + write-back + session counters +
+ * queue advance/re-queue. Shared by both modes — a correct pick in Choices
+ * is exactly "Knew it" (issue #31 acceptance).
+ */
+function applyGrade(word, knewIt) {
   const today = session.today;
-  const word = session.queue[0];
-
   const next = grade(word, knewIt, today);
   word.timesShown += 1;
   if (knewIt) word.timesRight += 1;
@@ -343,11 +374,61 @@ function onGrade(knewIt) {
   else session.didnt += 1;
   session.queue = session.queue.slice(1);
   if (!knewIt) session.queue = requeue(session.queue, word); // ADR-0002 rule 3
+}
+
+function onGrade(knewIt) {
+  if (!session || !revealed) return;
+  applyGrade(session.queue[0], knewIt);
 
   if (session.queue.length === 0) {
     showDone();
   } else {
     withFade(renderCard);
+  }
+}
+
+// --------------------------------------------- choices answering (issue #31)
+
+/**
+ * An option was picked: immediate monochrome feedback (correct always
+ * revealed solid ✓, a wrong pick ✕ + strikethrough, the rest faded), the
+ * card expands with the phrase, and the grade is recorded right away —
+ * advancing is explicit (Next / card tap / Space), never timed.
+ */
+function onPick(index) {
+  if (!session || session.mode !== "choices" || answered) return;
+  answered = true;
+  const { word, options, correctIndex } = question;
+  const knewIt = index === correctIndex;
+
+  for (const [i, button] of optionButtons.entries()) {
+    button.disabled = true; // inert after the pick — no second guessing
+    if (i === correctIndex) {
+      button.classList.add("correct");
+      button.querySelector(".label").textContent = `\u2713 ${options[i]}`;
+    } else if (i === index) {
+      button.classList.add("wrong");
+      button.querySelector(".label").textContent = `\u2715 ${options[i]}`;
+    } else {
+      button.classList.add("faded");
+    }
+  }
+
+  els.choiceBack.hidden = word.example === null;
+  els.phraseChoice.textContent = word.example ?? "";
+  els.card.classList.add("answered");
+  els.card.style.cursor = "pointer"; // tapping the card advances now
+  els.btnNext.hidden = false;
+
+  applyGrade(word, knewIt);
+}
+
+function advanceChoice() {
+  if (!session || !answered) return;
+  if (session.queue.length === 0) {
+    showDone();
+  } else {
+    withFade(renderChoice);
   }
 }
 
@@ -399,7 +480,12 @@ async function start() {
 
 // --------------------------------------------------------------------- audio
 
-const speakerButtons = [els.speakWordFront, els.speakWordBack, els.speakPhrase];
+const speakerButtons = [
+  els.speakWordFront,
+  els.speakWordBack,
+  els.speakPhrase,
+  els.speakPhraseChoice,
+];
 
 /** Hairline/inert vs active speaker buttons (design-system disabled state). */
 function updateSpeakers() {
@@ -412,22 +498,34 @@ function updateSpeakers() {
 }
 
 /**
- * A speaker tap: eats the event (never reveals the card), speaks when a
- * Spanish voice exists, otherwise shows the one-line muted caption (#5).
+ * The word currently on screen. In choices mode the queue advances at pick
+ * time (the grade is recorded immediately), so `queue[0]` is already the
+ * next word — the displayed one lives on `question`.
+ */
+function shownWord() {
+  if (!session) return null;
+  return session.mode === "choices" ? question.word : session.queue[0];
+}
+
+/**
+ * A speaker tap: eats the event (never reveals/advances the card), speaks
+ * when a Spanish voice exists, otherwise shows the muted caption (#5).
  */
 function onSpeakerTap(event, getText) {
   event.stopPropagation();
-  if (!session) return;
+  const word = shownWord();
+  if (!word) return;
   if (!speech.isAvailable()) {
     els.voiceCaption.hidden = false;
     return;
   }
-  speech.speak(getText(session.queue[0]));
+  speech.speak(getText(word));
 }
 
 els.speakWordFront.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.word));
 els.speakWordBack.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.word));
 els.speakPhrase.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.example));
+els.speakPhraseChoice.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.example));
 
 speech.onVoicesChanged(updateSpeakers);
 updateSpeakers();
@@ -437,8 +535,17 @@ updateSpeakers();
 els.linkSheet.href = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}`;
 
 els.card.addEventListener("click", () => {
+  if (session?.mode === "choices") {
+    advanceChoice(); // no-op until answered; the card isn't tappable before
+    return;
+  }
   if (!revealed) reveal();
 });
+
+for (const [i, button] of optionButtons.entries()) {
+  button.addEventListener("click", () => onPick(i));
+}
+els.btnNext.addEventListener("click", () => advanceChoice());
 
 els.btnWrong.addEventListener("click", () => onGrade(false));
 els.btnRight.addEventListener("click", () => onGrade(true));
@@ -460,7 +567,7 @@ els.btnSoonBack.addEventListener("click", () => {
 
 els.modeCards.addEventListener("click", () => setMode("cards"));
 els.modeChoices.addEventListener("click", () => {
-  if (CHOICES_IMPLEMENTED && choicesPoolOk()) setMode("choices");
+  if (choicesAvailable(words)) setMode("choices");
 });
 
 els.btnSignin.addEventListener("click", async () => {
@@ -491,8 +598,20 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  // Review session: Space = reveal, 1/← and 2/→ = grade.
   if (!session) return;
+
+  // Choices session: 1–4 pick an option, Space/Enter advance after answering.
+  if (session.mode === "choices") {
+    if (event.key === " ") event.preventDefault(); // don't scroll
+    if (!answered && ["1", "2", "3", "4"].includes(event.key)) {
+      onPick(Number(event.key) - 1);
+    } else if (answered && (event.key === " " || event.key === "Enter")) {
+      advanceChoice();
+    }
+    return;
+  }
+
+  // Classic session: Space = reveal, 1/← and 2/→ = grade.
   if (event.key === " ") {
     event.preventDefault(); // don't scroll
     reveal();
