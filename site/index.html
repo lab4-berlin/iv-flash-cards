@@ -73,6 +73,79 @@
       </div>
     </section>
 
+    <!-- Import screen (issue #37, design/word-import.md): slim header +
+         four sub-screens (key entry, add words, progress, results/error),
+         driven by js/importscreen.js -->
+    <section id="state-import" class="import" hidden>
+      <header class="imp-head">
+        <span class="imp-title">Import words</span>
+        <button id="imp-close" class="close" type="button" aria-label="Close import">&#10005;</button>
+      </header>
+
+      <!-- Gemini key entry (shown when no key is saved; ADR-0004) -->
+      <div id="imp-key" class="imp-body" hidden>
+        <h3>Gemini API key</h3>
+        <p class="imp-copy">
+          Generating translations, phrases and audio uses Google's Gemini API
+          with a free key from your own Google account &mdash; see
+          <a href="https://github.com/lab4-berlin/iv-flash-cards#gemini-api-key-ai-features"
+             target="_blank" rel="noopener">the setup guide</a>.
+          The key stays on this device.
+        </p>
+        <input id="imp-key-input" class="key-input" type="text"
+               placeholder="AIza&hellip;" autocomplete="off" spellcheck="false" />
+        <div id="imp-key-caption" class="cap" hidden></div>
+        <button id="imp-key-save" class="btn solid full" type="button">Save and continue</button>
+        <button id="imp-key-keep" class="btn outline full" type="button" hidden>Keep current key</button>
+        <button id="imp-key-remove" class="link-cap" type="button" hidden>Remove key</button>
+      </div>
+
+      <!-- Step 1: add words -->
+      <div id="imp-input" class="imp-body" hidden>
+        <textarea id="imp-text" placeholder="One Spanish word per line"
+                  autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+        <div class="under-row">
+          <button id="imp-upload" class="btn outline" type="button">Upload .txt</button>
+          <span id="imp-count" class="count-cap">0 words</span>
+        </div>
+        <input id="imp-file" type="file" accept=".txt,text/plain" hidden />
+        <div class="imp-spacer"></div>
+        <button id="imp-generate" class="btn disabled full" type="button" disabled>Generate</button>
+        <button id="imp-key-change" class="link-cap" type="button">Change API key</button>
+      </div>
+
+      <!-- Step 2: batch progress -->
+      <div id="imp-progress" class="imp-body" hidden>
+        <div class="imp-progress-bar">
+          <div id="imp-progress-count" class="count"></div>
+          <div class="bar"><div id="imp-progress-fill" class="fill"></div></div>
+        </div>
+        <div class="note">about 10 seconds per word &middot; you can leave this open in the background</div>
+        <div id="imp-rows" class="imp-rows"></div>
+        <button id="imp-cancel" class="btn outline full" type="button">Cancel</button>
+      </div>
+
+      <!-- Step 3: results -->
+      <div id="imp-results" class="imp-body" hidden>
+        <div id="imp-headline" class="headline"></div>
+        <div id="imp-sub" class="sub" hidden></div>
+        <div id="imp-report" class="imp-rows"></div>
+        <div class="imp-actions">
+          <button id="imp-done" class="btn solid" type="button">Done</button>
+          <button id="imp-retry" class="btn solid" type="button" hidden></button>
+        </div>
+        <a id="imp-sheet" class="link-cap" target="_blank" rel="noopener">Open sheet to edit</a>
+      </div>
+
+      <!-- Whole-batch failure: generator unreachable -->
+      <div id="imp-error" class="imp-body imp-center" hidden>
+        <h3>Couldn't reach the generator</h3>
+        <p class="imp-copy">Check your connection and API key, then try again.</p>
+        <button id="imp-error-retry" class="btn solid single" type="button">Retry</button>
+        <button id="imp-error-back" class="btn outline single" type="button">Back</button>
+      </div>
+    </section>
+
     <section id="state-done" class="message" hidden>
       <h3>Session complete</h3>
       <div id="done-stats" class="stats"></div>

@@ -247,9 +247,13 @@ export function createImporter({
    * @param {string[]} vocabulary existing words (the sheet's words column)
    * @param {(items: object[]) => void} [onProgress] called with a fresh
    *   items snapshot after every state change, for the UI
+   * @param {() => boolean} [shouldStop] checked before each word; when it
+   *   returns true the batch stops there — the current word is never cut
+   *   mid-flight (per-word atomicity, design/word-import.md Cancel), and
+   *   unprocessed words simply stay `pending`
    * @returns {Promise<{items: object[], summary: object}>}
    */
-  async function run(inputText, vocabulary, onProgress) {
+  async function run(inputText, vocabulary, onProgress, shouldStop) {
     const items = planBatch(inputText, vocabulary);
     const vocab = [...vocabulary];
     const update = (index, next) => {
@@ -259,6 +263,7 @@ export function createImporter({
     onProgress?.([...items]);
 
     for (let i = 0; i < items.length; i++) {
+      if (shouldStop?.()) break;
       if (items[i].state !== "pending") continue;
       const fail = (error) =>
         update(

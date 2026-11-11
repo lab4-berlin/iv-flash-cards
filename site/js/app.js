@@ -4,12 +4,18 @@
 // design/flashcard-review.md.
 //
 // States: loading → signin? → (empty | home) → reviewing → done → home;
-// Listen/Import route to a placeholder until #41/#37 land. Error screen on
-// startup read failure; sync banner driven by the queue.
+// Import is its own screen (issue #37, importscreen.js); Listen routes to a
+// placeholder until #41 lands. Error screen on startup read failure; sync
+// banner driven by the queue.
 
 import { CLIENT_ID, SPREADSHEET_ID } from "./config.js";
 import * as auth from "./auth.js";
-import { loadWords, writeStats } from "./sheets.js";
+import {
+  loadWords,
+  writeStats,
+  appendWords,
+  writeEnrichment,
+} from "./sheets.js";
 import {
   buildQueue,
   buildAheadQueue,
@@ -20,6 +26,12 @@ import {
 import { createWriteQueue } from "./queue.js";
 import { choicesAvailable, buildQuestion } from "./distractors.js";
 import * as speech from "./speech.js";
+import * as apikey from "./apikey.js";
+import { enrichWord } from "./gemini.js";
+import { synthesize } from "./tts.js";
+import { ensureFolder, uploadClip, fetchClip } from "./drive.js";
+import { createImporter } from "./importer.js";
+import { initImportScreen } from "./importscreen.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -81,6 +93,7 @@ const MESSAGE_STATES = [
   "state-soon",
   "state-empty",
   "state-done",
+  "state-import",
 ];
 
 const FADE_MS = 150;
@@ -284,16 +297,68 @@ function showHome() {
   showState("state-home");
 }
 
-/** Placeholder screen until Listen (#41) and Import (#37) are built. */
+/** Placeholder screen until Listen (#41) is built. */
 const SOON = {
   listen: { title: "Listen", text: "Hands-free listening is coming soon." },
-  import: { title: "Import words", text: "Word import is coming soon." },
 };
 
 function showSoon(which) {
   els.soonTitle.textContent = SOON[which].title;
   els.soonText.textContent = SOON[which].text;
   showState("state-soon");
+}
+
+// --------------------------------------------------- word import (issue #37)
+
+/** A valid token, silently refreshed when it expired mid-import (#36 runs
+ *  can outlive the hour-long OAuth token). */
+async function freshToken() {
+  return auth.getToken() ?? auth.requestToken({ silent: true });
+}
+
+// The orchestrator (#36) with its real dependencies: Gemini text + TTS use
+// the user-supplied key (ADR-0004), rows and clips go through the OAuth
+// token (sheets.js / drive.js, ADR-0005).
+const importer = createImporter({
+  enrich: (word, vocabulary) => enrichWord(apikey.getKey(), word, vocabulary),
+  appendWord: async (word) => appendWords(await freshToken(), [word]),
+  writeEnrichment: async (word) => writeEnrichment(await freshToken(), word),
+  synthesize: (text, language, voice) =>
+    synthesize(apikey.getKey(), text, language, voice),
+  uploadClip: async (filename, blob) => {
+    const token = await freshToken();
+    return uploadClip(token, await ensureFolder(token), filename, blob);
+  },
+});
+
+const importScreen = initImportScreen({
+  importer,
+  getVocabulary: () => words.map((w) => w.word),
+  reloadWords: async () => {
+    words = await loadWords(await freshToken());
+    return words;
+  },
+  fetchClip: async (fileId) => fetchClip(await freshToken(), fileId),
+  apiKey: apikey,
+  sheetUrl: `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}`,
+  // Leaving import lands wherever makes sense with the (reloaded) words.
+  onExit: () => (words.length === 0 ? showState("state-empty") : showHome()),
+  // The import screen may borrow the sync banner for failed sheet appends
+  // (design/word-import.md); null restores the write-queue's own display.
+  setBanner: (text) => {
+    if (text) {
+      els.banner.textContent = text;
+      els.banner.hidden = false;
+    } else {
+      els.banner.textContent = "Couldn't save progress \u2014 retrying";
+      els.banner.hidden = writeQueue.pendingCount() === 0;
+    }
+  },
+});
+
+function openImport() {
+  showState("state-import");
+  importScreen.open();
 }
 
 // ------------------------------------------- review-mode picker (issue #31)
@@ -557,8 +622,8 @@ els.btnDone.addEventListener("click", () => loadAndBegin()); // refetch, lands H
 els.btnClose.addEventListener("click", () => showHome());
 els.btnReview.addEventListener("click", () => startReview());
 els.btnListen.addEventListener("click", () => showSoon("listen"));
-els.btnImport.addEventListener("click", () => showSoon("import"));
-els.btnImportEmpty.addEventListener("click", () => showSoon("import"));
+els.btnImport.addEventListener("click", () => openImport());
+els.btnImportEmpty.addEventListener("click", () => openImport());
 els.btnSoonBack.addEventListener("click", () => {
   // The empty state also links here; Home needs words to make sense.
   if (words.length === 0) showState("state-empty");
@@ -593,7 +658,7 @@ document.addEventListener("keydown", (event) => {
     }
     const key = event.key.toLowerCase();
     if (key === "l") showSoon("listen");
-    else if (key === "i") showSoon("import");
+    else if (key === "i") openImport();
     else if (key === "m") toggleMode();
     return;
   }
