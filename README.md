@@ -98,3 +98,47 @@ Notes:
 - The client ID and spreadsheet ID are identifiers, not secrets — they are
   visible in the deployed page's JS by design; they're only kept out of the
   repo source. The sheet itself stays private behind Google sign-in.
+
+## Gemini API key (AI features)
+
+AI features (bulk-import enrichment, generated audio — see
+[ADR-0004](docs/adr/0004-client-side-ai-with-user-supplied-key.md)) call
+Google's Generative Language API directly from the browser with a **key you
+create in your own Google account**. The key is **never** put in the repo,
+in GitHub secrets, or in the deploy — anything the deployed page contains is
+public. Instead you paste it into the app once per device; it is kept in
+that browser's localStorage and sent only to Google's API. Without a key the
+AI features show an "add a key" prompt and everything else works normally.
+
+### 1. Create the key
+
+1. Open [Google AI Studio](https://aistudio.google.com/apikey) and sign in
+   with the same Google account as the app.
+2. Click **Create API key** and pick the Google Cloud project to attach it
+   to (the `iv-flash-cards` project from the setup above is fine). No
+   billing account is needed — the free tier covers this app.
+3. Copy the key (starts with `AIza…`).
+
+### 2. Restrict the key (mandatory)
+
+An unrestricted key that leaks can be abused by anyone. These two
+restrictions make a leaked key useless anywhere but this app. In the
+[Google Cloud console](https://console.cloud.google.com/apis/credentials),
+pick the project from step 1, open the key under **API keys**, and set:
+
+- **Application restrictions → Websites** (HTTP referrers), allowing exactly:
+  - `https://lab4-berlin.github.io/*`
+  - `http://localhost:8000/*`
+- **API restrictions → Restrict key**, selecting only the
+  **Generative Language API**.
+
+Save. Restrictions can take a minute or two to propagate.
+
+### 3. Enter it in the app
+
+Paste the key into the app's key prompt. The app validates it with one
+cheap API call and tells you right away whether it works, distinguishing a
+rejected key (typo, revoked, or restrictions that don't match the origin)
+from a network problem. The key stays on that device until you clear it in
+the app (or clear the site's browser data); a new device or browser needs
+the key pasted again.
