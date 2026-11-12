@@ -4,9 +4,9 @@
 // design/flashcard-review.md.
 //
 // States: loading → signin? → (empty | home) → reviewing → done → home;
-// Import is its own screen (issue #37, importscreen.js); Listen routes to a
-// placeholder until #41 lands. Error screen on startup read failure; sync
-// banner driven by the queue.
+// Import (issue #37, importscreen.js) and Listen (issue #41,
+// listenscreen.js) are their own screens. Error screen on startup read
+// failure; sync banner driven by the queue.
 
 import { CLIENT_ID, SPREADSHEET_ID } from "./config.js";
 import * as auth from "./auth.js";
@@ -32,6 +32,8 @@ import { synthesize } from "./tts.js";
 import { ensureFolder, uploadClip, fetchClip } from "./drive.js";
 import { createImporter } from "./importer.js";
 import { initImportScreen } from "./importscreen.js";
+import { createPlayer } from "./player.js";
+import { initListenScreen } from "./listenscreen.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,9 +69,6 @@ const els = {
   modeCards: $("mode-cards"),
   modeChoices: $("mode-choices"),
   modeCaption: $("mode-caption"),
-  soonTitle: $("soon-title"),
-  soonText: $("soon-text"),
-  btnSoonBack: $("btn-soon-back"),
   doneStats: $("done-stats"),
   doneWarn: $("done-warn"),
   choiceBack: $("choice-back"),
@@ -90,7 +89,7 @@ const MESSAGE_STATES = [
   "state-signin",
   "state-error",
   "state-home",
-  "state-soon",
+  "state-listen",
   "state-empty",
   "state-done",
   "state-import",
@@ -297,17 +296,6 @@ function showHome() {
   showState("state-home");
 }
 
-/** Placeholder screen until Listen (#41) is built. */
-const SOON = {
-  listen: { title: "Listen", text: "Hands-free listening is coming soon." },
-};
-
-function showSoon(which) {
-  els.soonTitle.textContent = SOON[which].title;
-  els.soonText.textContent = SOON[which].text;
-  showState("state-soon");
-}
-
 // --------------------------------------------------- word import (issue #37)
 
 /** A valid token, silently refreshed when it expired mid-import (#36 runs
@@ -359,6 +347,28 @@ const importScreen = initImportScreen({
 function openImport() {
   showState("state-import");
   importScreen.open();
+}
+
+// --------------------------------------------------- listen mode (issue #41)
+
+// The continuous player (#40, ADR-0006) with its real browser defaults;
+// clips come from Drive through the OAuth token (ADR-0005). Listening
+// writes no stats — nothing here touches the scheduler or the write queue.
+const player = createPlayer({
+  fetchClip: async (fileId) => fetchClip(await freshToken(), fileId),
+});
+
+const listenScreen = initListenScreen({
+  player,
+  getWords: () => words,
+  // Leaving lands wherever makes sense with the current words (like import).
+  onExit: () => (words.length === 0 ? showState("state-empty") : showHome()),
+  onImport: () => openImport(),
+});
+
+function openListen() {
+  showState("state-listen");
+  listenScreen.open();
 }
 
 // ------------------------------------------- review-mode picker (issue #31)
@@ -621,14 +631,9 @@ els.btnDone.addEventListener("click", () => loadAndBegin()); // refetch, lands H
 // already graded this session keep their (optimistically written) state.
 els.btnClose.addEventListener("click", () => showHome());
 els.btnReview.addEventListener("click", () => startReview());
-els.btnListen.addEventListener("click", () => showSoon("listen"));
+els.btnListen.addEventListener("click", () => openListen());
 els.btnImport.addEventListener("click", () => openImport());
 els.btnImportEmpty.addEventListener("click", () => openImport());
-els.btnSoonBack.addEventListener("click", () => {
-  // The empty state also links here; Home needs words to make sense.
-  if (words.length === 0) showState("state-empty");
-  else showHome();
-});
 
 els.modeCards.addEventListener("click", () => setMode("cards"));
 els.modeChoices.addEventListener("click", () => {
@@ -657,7 +662,7 @@ document.addEventListener("keydown", (event) => {
       return;
     }
     const key = event.key.toLowerCase();
-    if (key === "l") showSoon("listen");
+    if (key === "l") openListen();
     else if (key === "i") openImport();
     else if (key === "m") toggleMode();
     return;

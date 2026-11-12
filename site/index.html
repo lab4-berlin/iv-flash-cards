@@ -57,11 +57,51 @@
       <div class="home-keys">enter &middot; L &middot; I &middot; M</div>
     </section>
 
-    <!-- Placeholder until Listen (#41) and Import (#37) land -->
-    <section id="state-soon" class="message" hidden>
-      <h3 id="soon-title"></h3>
-      <p id="soon-text"></p>
-      <button id="btn-soon-back" class="btn outline single" type="button">Back</button>
+    <!-- Listen screen (issue #41, design/listening-mode.md): hands-free
+         continuous playback. The only inverted screen (design-system.md);
+         fixed overlay, driven by js/listenscreen.js -->
+    <section id="state-listen" class="listen" hidden>
+      <div class="listen-top">
+        <button id="listen-close" class="close" type="button" aria-label="Back to home">&#10005;</button>
+        <span id="listen-counter" class="listen-counter"></span>
+      </div>
+
+      <!-- Playing / paused / loading: big word anchor + now-playing line -->
+      <div id="listen-body" class="listen-center">
+        <div id="listen-word" class="listen-word"></div>
+        <div id="listen-line" class="listen-line"></div>
+        <div id="listen-paused" class="listen-cap" hidden>paused</div>
+      </div>
+
+      <!-- Empty: no word has a complete 4-clip set yet -->
+      <div id="listen-empty" class="listen-center" hidden>
+        <div class="listen-message">
+          <h3>Nothing to listen to yet</h3>
+          <p>Import words to generate audio.</p>
+          <button id="listen-import" class="btn inv" type="button">Import words</button>
+        </div>
+      </div>
+
+      <!-- Error: no block could be built at all (e.g. offline) -->
+      <div id="listen-error" class="listen-center" hidden>
+        <div class="listen-message">
+          <h3>Couldn't load audio</h3>
+          <p>Check your connection and try again.</p>
+          <button id="listen-retry" class="btn inv" type="button">Try again</button>
+        </div>
+      </div>
+
+      <!-- Driver-safe controls: 96px solid play/pause, 72px outline next;
+           fixed positions, never move (design checklist) -->
+      <div id="listen-controls" class="listen-controls">
+        <button id="listen-play" class="ctl-main" type="button" aria-label="Play or pause">
+          <svg id="listen-glyph-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+          <svg id="listen-glyph-play" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M7 4l13 8-13 8V4z"/></svg>
+        </button>
+        <button id="listen-next" class="ctl-next" type="button" aria-label="Next word">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4l10 8-10 8V4zm12 0h3v16h-3z"/></svg>
+        </button>
+      </div>
     </section>
 
     <section id="state-empty" class="message" hidden>

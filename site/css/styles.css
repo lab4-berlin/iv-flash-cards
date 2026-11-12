@@ -6,6 +6,11 @@
   --paper: #ffffff;
   --muted: #666666;
   --hairline: #dddddd;
+  /* Inverted mode — the listen screen only (design-system.md) */
+  --ink-inv: #ffffff;
+  --paper-inv: #000000;
+  --muted-inv: #999999;
+  --hairline-inv: #333333;
 }
 
 * {
@@ -711,6 +716,152 @@ button {
   flex: 1;
 }
 
+/* ---- listen screen (issue #41, design/listening-mode.md) ---- */
+
+/* The only inverted screen. A fixed overlay: pure black everywhere,
+   regardless of the layout underneath. */
+.listen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-inv);
+  color: var(--ink-inv);
+}
+
+.listen-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px 8px 8px;
+}
+
+.listen .close {
+  color: var(--ink-inv);
+}
+
+.listen-counter {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--muted-inv);
+}
+
+.listen-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  padding: 24px;
+  text-align: center;
+}
+
+/* The glanceable anchor: stays huge and fixed through the word's whole
+   6-step sequence. */
+.listen-word {
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* The clip being spoken now; min-height keeps the layout from shifting
+   when it is empty (word clip, gaps — driver-safety checklist). */
+.listen-line {
+  font-size: 20px;
+  line-height: 1.5;
+  color: var(--muted-inv);
+  min-height: 30px;
+}
+
+.listen-cap {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-inv);
+}
+
+/* Driver-safe controls: fixed positions, nothing under 48px. */
+.listen-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  padding: 32px 0 48px;
+}
+
+.ctl-main {
+  width: 96px;
+  height: 96px;
+  background: var(--ink-inv);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ctl-main svg {
+  width: 36px;
+  height: 36px;
+  fill: var(--paper-inv);
+}
+
+.ctl-main:disabled {
+  background: var(--hairline-inv);
+  cursor: default;
+}
+
+.ctl-next {
+  width: 72px;
+  height: 72px;
+  background: none;
+  border: 1px solid var(--ink-inv);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.ctl-next svg {
+  width: 28px;
+  height: 28px;
+  fill: var(--ink-inv);
+}
+
+/* Empty / error message states (inverted mirror of .message) */
+.listen-message {
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.listen-message h3 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.listen-message p {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--muted-inv);
+}
+
+.btn.inv {
+  flex: none;
+  min-width: 200px;
+  padding: 0 24px;
+  margin-top: 12px;
+  background: none;
+  border: 1px solid var(--ink-inv);
+  color: var(--ink-inv);
+}
+
 /* ---- message states ---- */
 
 .message {
@@ -800,6 +951,10 @@ button {
 
   .menu {
     width: 280px;
+  }
+
+  .listen-word {
+    font-size: 64px;
   }
 
   .home-keys {
