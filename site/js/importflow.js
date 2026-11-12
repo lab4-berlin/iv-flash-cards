@@ -43,16 +43,24 @@ export function generateLabel(count) {
 /** Short muted reason for a failed row, from the phase the word broke in. */
 export function failureCaption(item) {
   if (item?.error?.name === "RateLimitError") return "rate limited";
+  let base;
   switch (item?.phase) {
     case "enriching":
-      return "generation failed";
+      base = "generation failed";
+      break;
     case "appending":
-      return "couldn't save";
+      base = "couldn't save";
+      break;
     case "audio":
-      return "audio failed";
+      base = "audio failed";
+      break;
     default:
-      return "failed";
+      base = "failed";
   }
+  // Surface the underlying API error (name, HTTP status, failing call) so
+  // real problems are diagnosable from the results screen itself.
+  const detail = item?.error?.message;
+  return detail ? `${base} — ${detail}` : base;
 }
 
 /**

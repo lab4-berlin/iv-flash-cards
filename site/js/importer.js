@@ -265,7 +265,13 @@ export function createImporter({
     for (let i = 0; i < items.length; i++) {
       if (shouldStop?.()) break;
       if (items[i].state !== "pending") continue;
-      const fail = (error) =>
+      const fail = (error) => {
+        // Full error to the console for diagnosis; the results screen shows
+        // error.message via importflow.failureCaption.
+        console.error(
+          `[import] "${items[i].word}" failed in phase "${items[i].state}":`,
+          error,
+        );
         update(
           i,
           transition(items[i], "failed", {
@@ -273,6 +279,7 @@ export function createImporter({
             retryable: isRateLimit(error),
           }),
         );
+      };
 
       // Phase 1: text enrichment → append the row (A:L filled, M:P empty).
       update(i, transition(items[i], "enriching"));
