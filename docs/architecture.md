@@ -57,45 +57,48 @@ design/               # Nick's artifacts
 
 ## Data model (worksheet `Words`, header in row 1)
 
+Column layout per #56 — `phrase_translation` sits in the user-text zone
+next to the phrase it translates; the app-owned stats block is `G:L`; the
+audio refs are `M:P`:
+
 | Col | Header | Owner | Notes |
 |---|---|---|---|
 | A | `word` | user | Spanish word |
 | B | `translation` | user | English |
 | C | `example` | user | optional example phrase |
-| D | `date_added` | user | `YYYY-MM-DD` |
-| E | `language` | user | `es` for MVP; model is multi-language ready |
-| F | `times_shown` | app | integer |
-| G | `times_right` | app | integer |
-| H | `times_wrong` | app | integer |
-| I | `last_reviewed` | app | `YYYY-MM-DD` |
-| J | `interval_days` | app | integer, 0 = new/just failed |
-| K | `due_date` | app | `YYYY-MM-DD`, empty = never reviewed = due |
-
-V2 (#27) extends the sheet with enrichment columns:
-
-| Col | Header | Owner | Notes |
-|---|---|---|---|
-| L | `phrase_translation` | app (user may edit) | English translation of the example phrase |
+| D | `phrase_translation` | app (user may edit) | English translation of the example phrase |
+| E | `date_added` | user | `YYYY-MM-DD` |
+| F | `language` | user | `es` for MVP; model is multi-language ready |
+| G | `times_shown` | app | integer |
+| H | `times_right` | app | integer |
+| I | `times_wrong` | app | integer |
+| J | `last_reviewed` | app | `YYYY-MM-DD` |
+| K | `interval_days` | app | integer, 0 = new/just failed |
+| L | `due_date` | app | `YYYY-MM-DD`, empty = never reviewed = due |
 | M | `audio_word_es` | app | Drive file ID, clip of the Spanish word |
 | N | `audio_phrase_es` | app | Drive file ID, clip of the Spanish phrase |
 | O | `audio_word_en` | app | Drive file ID, clip of the word translation |
 | P | `audio_phrase_en` | app | Drive file ID, clip of the phrase translation |
 
-Review grading only ever writes `F:K` (ADR-0003); import appends whole rows
-at the bottom (`values.append`); enrichment/backfill writes `L:P`. An empty
-audio cell means "missing — generate on next backfill" (ADR-0005), so rows
-added by hand stay valid and a cleared cell requests regeneration.
+Review grading only ever writes the stats block `G:L` (ADR-0003) — never
+user text columns; import appends whole `A:P` rows at the bottom
+(`values.append`); the audio backfill writes `M:P`; the phrase-translation
+backfill (#28) writes the single cell `D{row}`. An empty audio cell means
+"missing — generate on next backfill" (ADR-0005), so rows added by hand
+stay valid and a cleared cell requests regeneration. On a completely blank
+sheet the app writes the header row itself (`A1:P1`) at startup (#56).
 Full spec with example rows: `docs/sheet-template.md`.
 
 ## Data flow
 
 1. **Startup:** `auth.js` obtains a token (silent if possible) →
-   `sheets.js` reads `Words!A2:K` → `model.js` maps rows to Word objects
+   `sheets.js` ensures the header row exists (written to a blank sheet,
+   #56) and reads `Words!A2:P` → `model.js` maps rows to Word objects
    (keeping their row index) → `queue.js` flushes any pending writes from a
    previous session → `scheduler.js` builds the due queue.
 2. **Review loop:** `app.js` shows front → reveal → grade. On grade:
    scheduler computes new `(interval_days, due_date)`, stats are incremented,
-   and `queue.js` issues an immediate write of `F{row}:K{row}`. Failures land
+   and `queue.js` issues an immediate write of `G{row}:L{row}`. Failures land
    in the persisted pending queue with a visible banner (ADR-0003).
 3. **Session end:** when the due queue (including same-session re-queues of
    failed cards) is empty, show the end-of-session state; if it was empty at
@@ -135,9 +138,10 @@ failure never aborts the batch (#27 acceptance):
 
 1. **Text:** dedupe against the loaded vocabulary (normalized compare) →
    Gemini enrichment (prompt includes the current word list to bias phrases
-   toward known vocabulary) → append row with `A:L` filled.
+   toward known vocabulary) → append row with `A:L` filled (user text
+   including the `D` phrase translation, plus zeroed stats; `M:P` empty).
 2. **Audio:** synthesize 4 clips (random voice each) → upload to Drive →
-   write `L:P` file IDs. Partial audio failure leaves cells empty; retrying
+   write `M:P` file IDs. Partial audio failure leaves cells empty; retrying
    is the same operation as the #28 backfill ("fill whatever is missing").
 
 Pacing: words are processed sequentially with backoff on 429s — free-tier

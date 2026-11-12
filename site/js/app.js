@@ -11,10 +11,11 @@
 import { CLIENT_ID, SPREADSHEET_ID } from "./config.js";
 import * as auth from "./auth.js";
 import {
+  ensureHeader,
   loadWords,
   writeStats,
   appendWords,
-  writeEnrichment,
+  writeAudioRefs,
 } from "./sheets.js";
 import {
   buildQueue,
@@ -310,7 +311,7 @@ async function freshToken() {
 const importer = createImporter({
   enrich: (word, vocabulary) => enrichWord(apikey.getKey(), word, vocabulary),
   appendWord: async (word) => appendWords(await freshToken(), [word]),
-  writeEnrichment: async (word) => writeEnrichment(await freshToken(), word),
+  writeAudioRefs: async (word) => writeAudioRefs(await freshToken(), word),
   synthesize: (text, language, voice) =>
     synthesize(apikey.getKey(), text, language, voice),
   uploadClip: async (filename, blob) => {
@@ -509,11 +510,20 @@ function advanceChoice() {
 
 // -------------------------------------------------------------------- startup
 
+// The header check runs once per app load (issue #56): a brand-new blank
+// sheet gets its header row written before the first read.
+let headerEnsured = false;
+
 /** Load the sheet and land on Home (or the empty/signin/error states). */
 async function loadAndBegin() {
   showState("state-loading");
   try {
-    words = await loadWords(auth.getToken());
+    const token = auth.getToken();
+    if (!headerEnsured) {
+      await ensureHeader(token);
+      headerEnsured = true;
+    }
+    words = await loadWords(token);
   } catch (error) {
     if (error?.status === 401) {
       els.signinHint.textContent = "Your session expired — sign in again.";

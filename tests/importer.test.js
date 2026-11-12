@@ -184,7 +184,7 @@ function enrichmentFor(word) {
 
 /** Importer with happy-path stub deps; every call is recorded. */
 function stubImporter(overrides = {}) {
-  const log = { enriched: [], appended: [], synthesized: [], uploaded: [], enrichmentWrites: [], sleeps: [] };
+  const log = { enriched: [], appended: [], synthesized: [], uploaded: [], audioRefWrites: [], sleeps: [] };
   let nextRow = 10;
   const importer = createImporter({
     enrich: async (word, vocabulary) => {
@@ -195,8 +195,8 @@ function stubImporter(overrides = {}) {
       log.appended.push(word);
       return nextRow++;
     },
-    writeEnrichment: async (word) => {
-      log.enrichmentWrites.push(word);
+    writeAudioRefs: async (word) => {
+      log.audioRefWrites.push(word);
     },
     synthesize: async (text, language, voice) => {
       log.synthesized.push({ text, language, voice });
@@ -215,7 +215,7 @@ function stubImporter(overrides = {}) {
 }
 
 describe("run (pipeline glue)", () => {
-  test("happy path: enrich → append A:L → 4 clips → write L:P → done", async () => {
+  test("happy path: enrich → append A:P → 4 clips → write M:P → done", async () => {
     const { importer, log } = stubImporter();
     const { items, summary } = await importer.run("perro", ["gato"]);
 
@@ -233,7 +233,7 @@ describe("run (pipeline glue)", () => {
     assert.equal(appended.language, "es");
     assert.equal(appended.audioWordEs, null);
 
-    // Phase 2: 4 clips in order, correct text/language, IDs written to L:P.
+    // Phase 2: 4 clips in order, correct text/language, IDs written to M:P.
     assert.deepEqual(
       log.synthesized.map((s) => [s.text, s.language]),
       [
@@ -252,7 +252,7 @@ describe("run (pipeline glue)", () => {
         "10-perro-phrase_en.wav",
       ],
     );
-    const written = log.enrichmentWrites[0];
+    const written = log.audioRefWrites[0];
     assert.equal(written.rowIndex, 10);
     assert.deepEqual(
       [written.audioWordEs, written.audioPhraseEs, written.audioWordEn, written.audioPhraseEn],
@@ -311,7 +311,7 @@ describe("run (pipeline glue)", () => {
     assert.equal(items[0].state, "failed");
     assert.equal(items[0].phase, "appending");
     assert.equal(log.synthesized.length, 0);
-    assert.equal(log.enrichmentWrites.length, 0);
+    assert.equal(log.audioRefWrites.length, 0);
   });
 
   test("partial clip failure: failed(audio) but successful IDs still written", async () => {
@@ -325,7 +325,7 @@ describe("run (pipeline glue)", () => {
     assert.equal(items[0].state, "failed");
     assert.equal(items[0].phase, "audio");
     assert.equal(items[0].clipsDone, 2); // the two Spanish clips
-    const written = log.enrichmentWrites[0];
+    const written = log.audioRefWrites[0];
     assert.equal(written.audioWordEs, "drive-1");
     assert.equal(written.audioPhraseEs, "drive-2");
     assert.equal(written.audioWordEn, null); // left empty for retry
@@ -403,7 +403,7 @@ describe("generateMissingClips", () => {
     assert.equal(word.audioWordEs, "drive-1");
     assert.equal(word.audioWordEn, "drive-2");
     assert.equal(word.audioPhraseEs, null);
-    assert.equal(log.enrichmentWrites.length, 1);
+    assert.equal(log.audioRefWrites.length, 1);
     assert.equal(handAdded.audioWordEs, null); // input not mutated
   });
 
@@ -423,7 +423,7 @@ describe("generateMissingClips", () => {
     const { failures } = await importer.generateMissingClips(complete);
     assert.deepEqual(failures, []);
     assert.equal(log.synthesized.length, 0);
-    assert.equal(log.enrichmentWrites.length, 0);
+    assert.equal(log.audioRefWrites.length, 0);
   });
 
   test("a failed clip is reported and its cell left empty; the rest proceed", async () => {
@@ -452,7 +452,7 @@ describe("generateMissingClips", () => {
     );
     assert.equal(word.audioWordEs, null);
     assert.equal(word.audioPhraseEs, "drive-1");
-    assert.equal(log.enrichmentWrites.length, 1);
+    assert.equal(log.audioRefWrites.length, 1);
   });
 
   test("rate-limited synthesis backs off before succeeding", async () => {
