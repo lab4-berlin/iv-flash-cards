@@ -151,6 +151,8 @@ describe("enrichWord", () => {
       "phrase_es",
       "phrase_en",
     ]);
+    // Thinking disabled on enrichment — the import speed-up of issue #59.
+    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingBudget: 0 });
   });
 
   test("429 surfaces as RateLimitError", async () => {

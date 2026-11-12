@@ -332,6 +332,27 @@ describe("run (pipeline glue)", () => {
     assert.equal(written.audioPhraseEn, null);
   });
 
+  test("persistent audio rate limit: shared ladder, successful clips kept, word failed-retryable", async () => {
+    const { importer, log } = stubImporter({
+      synthesize: async (text, language) => {
+        if (language === "en") throw new FakeRateLimitError();
+        return { fake: "blob" };
+      },
+    });
+    const { items } = await importer.run("perro", []);
+    assert.equal(items[0].state, "failed");
+    assert.equal(items[0].phase, "audio");
+    assert.equal(items[0].retryable, true);
+    assert.equal(items[0].clipsDone, 2); // the two Spanish clips landed
+    // One shared backoff ladder for the whole word (#59), not per clip.
+    assert.deepEqual(log.sleeps, [1000, 2000, 4000, 8000]);
+    const written = log.audioRefWrites[0];
+    assert.equal(written.audioWordEs, "drive-1");
+    assert.equal(written.audioPhraseEs, "drive-2");
+    assert.equal(written.audioWordEn, null); // left empty for retry
+    assert.equal(written.audioPhraseEn, null);
+  });
+
   test("words imported earlier in the batch join later prompts' vocabulary", async () => {
     const { importer, log } = stubImporter();
     await importer.run("perro\ngato", ["casa"]);
@@ -453,6 +474,114 @@ describe("generateMissingClips", () => {
     assert.equal(word.audioWordEs, null);
     assert.equal(word.audioPhraseEs, "drive-1");
     assert.equal(log.audioRefWrites.length, 1);
+  });
+
+  test("all 4 syntheses start before any upload (parallel within the word, #59)", async () => {
+    const events = [];
+    const { importer } = stubImporter({
+      synthesize: async (text, language) => {
+        events.push(`synth:${language}:${text}`);
+        return { fake: "blob" };
+      },
+      uploadClip: async (filename) => {
+        events.push(`upload:${filename}`);
+        return `drive-${events.length}`;
+      },
+    });
+    const { failures } = await importer.generateMissingClips({
+      word: "mesa",
+      translation: "table",
+      example: "La mesa es grande.",
+      phraseTranslation: "The table is big.",
+      audioWordEs: null,
+      audioPhraseEs: null,
+      audioWordEn: null,
+      audioPhraseEn: null,
+      rowIndex: 7,
+    });
+    assert.deepEqual(failures, []);
+    const firstUpload = events.findIndex((e) => e.startsWith("upload:"));
+    // A sequential pipeline would interleave synth/upload per clip; the
+    // parallel one initiates all 4 syntheses before any upload starts.
+    assert.equal(firstUpload, 4);
+    assert.equal(events.length, 8);
+  });
+
+  test("rate-limited synthesis: backoff, then only the missing clip is retried", async () => {
+    let phraseEsCalls = 0;
+    const { importer, log } = stubImporter({
+      synthesize: async (text, language) => {
+        log.synthesized.push({ text, language });
+        if (text === "La mesa es grande.") {
+          phraseEsCalls++;
+          if (phraseEsCalls === 1) throw new FakeRateLimitError();
+        }
+        return { fake: "blob", text, language };
+      },
+    });
+    const { word, failures } = await importer.generateMissingClips({
+      word: "mesa",
+      translation: "table",
+      example: "La mesa es grande.",
+      phraseTranslation: "The table is big.",
+      audioWordEs: null,
+      audioPhraseEs: null,
+      audioWordEn: null,
+      audioPhraseEn: null,
+      rowIndex: 7,
+    });
+    assert.deepEqual(failures, []);
+    assert.deepEqual(log.sleeps, [1000]);
+    // Pass 1 synthesized all 4; pass 2 retried only the rate-limited clip.
+    assert.equal(log.synthesized.length, 5);
+    assert.deepEqual(
+      log.synthesized.slice(4).map((s) => s.text),
+      ["La mesa es grande."],
+    );
+    // The 3 already-uploaded clips were not uploaded again.
+    assert.equal(log.uploaded.length, 4);
+    assert.equal(word.audioWordEs, "drive-1");
+    assert.equal(word.audioWordEn, "drive-2");
+    assert.equal(word.audioPhraseEn, "drive-3");
+    assert.equal(word.audioPhraseEs, "drive-4"); // landed on the retry pass
+    assert.equal(log.audioRefWrites.length, 1); // still a single M:P write
+  });
+
+  test("rate-limited upload: backoff, then only that clip is redone", async () => {
+    let uploadCalls = 0;
+    let rateLimitedOnce = false;
+    const { importer, log } = stubImporter({
+      uploadClip: async (filename) => {
+        uploadCalls++;
+        if (filename === "7-mesa-word_en.wav" && !rateLimitedOnce) {
+          rateLimitedOnce = true;
+          throw new FakeRateLimitError();
+        }
+        return `drive-${uploadCalls}`;
+      },
+    });
+    const { word, failures } = await importer.generateMissingClips({
+      word: "mesa",
+      translation: "table",
+      example: null,
+      phraseTranslation: null,
+      audioWordEs: null,
+      audioPhraseEs: null,
+      audioWordEn: null,
+      audioPhraseEn: null,
+      rowIndex: 7,
+    });
+    assert.deepEqual(failures, []);
+    assert.deepEqual(log.sleeps, [1000]);
+    // Pass 1: both word clips synthesized and uploaded (word_en upload rate
+    // limited); pass 2: only word_en synthesized and uploaded again.
+    assert.deepEqual(
+      log.synthesized.map((s) => s.text),
+      ["mesa", "table", "table"],
+    );
+    assert.equal(uploadCalls, 3);
+    assert.equal(word.audioWordEs, "drive-1");
+    assert.equal(word.audioWordEn, "drive-3");
   });
 
   test("rate-limited synthesis backs off before succeeding", async () => {
