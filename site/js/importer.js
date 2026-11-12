@@ -11,7 +11,7 @@
 //          (w, v) => gemini.enrichWord(key, w, v)
 //        - appendWord(word): append one A:P row, resolve with the 1-based
 //          row index it landed on (sheets.appendWords)
-//        - writeEnrichment(word): write the word's L:P cells
+//        - writeAudioRefs(word): write the word's M:P audio-ref cells
 //        - synthesize(text, language, voice): TTS, resolves with a Blob
 //        - uploadClip(filename, blob): Drive upload, resolves with file ID
 //
@@ -182,7 +182,7 @@ const isoToday = () => new Date().toISOString().slice(0, 10);
  * @param {object} deps see the module header for each function's contract
  * @param {(word, vocabulary) => Promise<object>} deps.enrich
  * @param {(word) => Promise<number>} deps.appendWord
- * @param {(word) => Promise<void>} deps.writeEnrichment
+ * @param {(word) => Promise<void>} deps.writeAudioRefs
  * @param {(text, language, voice) => Promise<Blob>} deps.synthesize
  * @param {(filename, blob) => Promise<string>} deps.uploadClip
  * @param {() => string} [deps.pickVoice] defaults to voices.js
@@ -193,7 +193,7 @@ const isoToday = () => new Date().toISOString().slice(0, 10);
 export function createImporter({
   enrich,
   appendWord,
-  writeEnrichment,
+  writeAudioRefs,
   synthesize,
   uploadClip,
   pickVoice = defaultPickVoice,
@@ -201,7 +201,7 @@ export function createImporter({
   today = isoToday,
 }) {
   /**
-   * Fill whatever audio cells are missing on a word, then persist `L:P`.
+   * Fill whatever audio cells are missing on a word, then persist `M:P`.
    * Works on freshly imported words and on hand-added rows alike — a clip
    * is generated only when its cell is empty and its source text exists,
    * so existing clips are never overwritten and rows without a phrase get
@@ -212,7 +212,7 @@ export function createImporter({
    * @returns {Promise<{word: object, failures: {kind, error}[]}>} the
    *   updated word (generated file IDs set) and the clips that failed —
    *   their cells stay empty, so retrying is running this again.
-   *   Rejects only when the final enrichment write fails.
+   *   Rejects only when the final audio-ref write fails.
    */
   async function generateMissingClips(word, onClip) {
     let updated = { ...word };
@@ -235,7 +235,7 @@ export function createImporter({
         failures.push({ kind, error });
       }
     }
-    if (generated > 0) await writeEnrichment(updated);
+    if (generated > 0) await writeAudioRefs(updated);
     return { word: updated, failures };
   }
 
@@ -274,7 +274,8 @@ export function createImporter({
           }),
         );
 
-      // Phase 1: text enrichment → append the row (A:L filled, M:P empty).
+      // Phase 1: text enrichment → append the row (A:L filled — user text
+      // incl. the D phrase translation, plus zeroed stats — M:P empty).
       update(i, transition(items[i], "enriching"));
       let enrichment;
       try {
@@ -314,7 +315,7 @@ export function createImporter({
       // Later prompts in this batch may reuse the words imported so far.
       vocab.push(word.word);
 
-      // Phase 2: 4 clips (random voice each) → write L:P file IDs.
+      // Phase 2: 4 clips (random voice each) → write M:P file IDs.
       update(i, transition(items[i], "audio", { rowIndex: word.rowIndex }));
       try {
         const result = await generateMissingClips(word, () =>

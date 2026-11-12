@@ -6,7 +6,7 @@
 //   2. `createWriteQueue(deps)` — the storage + fetch glue. Dependencies are
 //      injected so the module stays unit-testable and does not hard-couple
 //      to auth.js/sheets.js (which app.js wires in):
-//        - writeStats(entry): writes the entry's F:K values to its row
+//        - writeStats(entry): writes the entry's G:L stats values to its row
 //          (e.g. a wrapper around sheets.writeStats with the current token);
 //          must reject with an error carrying `status: 401` on auth failure.
 //        - refreshAuth(): one silent re-auth attempt; resolves true when a

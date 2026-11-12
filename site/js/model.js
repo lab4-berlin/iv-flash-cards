@@ -1,13 +1,45 @@
 // Sheet row ⇄ Word object mapping (pure module, no DOM/fetch).
-// Column layout (docs/sheet-template.md):
-//   A word | B translation | C example | D date_added | E language |
-//   F times_shown | G times_right | H times_wrong | I last_reviewed |
-//   J interval_days | K due_date | L phrase_translation |
+// Column layout (docs/sheet-template.md, reordered by #56):
+//   A word | B translation | C example | D phrase_translation |
+//   E date_added | F language | G times_shown | H times_right |
+//   I times_wrong | J last_reviewed | K interval_days | L due_date |
 //   M audio_word_es | N audio_phrase_es | O audio_word_en | P audio_phrase_en
-// The Sheets API returns rows as arrays of strings; trailing empty cells
-// may be omitted entirely. Empty app columns (F:K) mean "new word"; empty
-// enrichment cells (L:P) mean "missing — generate on next backfill"
-// (ADR-0005), so pre-V2 11-column rows stay valid.
+// The user-text zone is A:F (D is app-backfilled but user-editable); the
+// app-owned stats block is G:L; audio Drive-file refs are M:P. The Sheets
+// API returns rows as arrays of strings; trailing empty cells may be
+// omitted entirely. Empty stats cells (G:L) mean "new word"; empty audio
+// cells (M:P) mean "missing — generate on next backfill" (ADR-0005).
+
+/** Header row the app writes to `A1:P1` of a blank sheet (issue #56). */
+export const HEADER_ROW = [
+  "word",
+  "translation",
+  "example",
+  "phrase_translation",
+  "date_added",
+  "language",
+  "times_shown",
+  "times_right",
+  "times_wrong",
+  "last_reviewed",
+  "interval_days",
+  "due_date",
+  "audio_word_es",
+  "audio_phrase_es",
+  "audio_word_en",
+  "audio_phrase_en",
+];
+
+/**
+ * Whether the sheet needs its header row written: true only when a read of
+ * `A1:P1` came back with no values at all (a completely blank sheet). A
+ * sheet with any row-1 content — even a wrong header — is left untouched.
+ * @param {string[][]|undefined} values the `values` field of the Sheets
+ *   API response for `A1:P1` (absent when the range is empty)
+ */
+export function sheetNeedsHeader(values) {
+  return (values ?? []).length === 0;
+}
 
 function text(cell) {
   const value = (cell ?? "").trim();
@@ -29,15 +61,15 @@ export function rowToWord(row, rowIndex) {
     word: text(row[0]) ?? "",
     translation: text(row[1]) ?? "",
     example: text(row[2]),
-    dateAdded: text(row[3]) ?? "",
-    language: text(row[4]) ?? "",
-    timesShown: count(row[5]),
-    timesRight: count(row[6]),
-    timesWrong: count(row[7]),
-    lastReviewed: text(row[8]),
-    intervalDays: count(row[9]),
-    dueDate: text(row[10]),
-    phraseTranslation: text(row[11]),
+    phraseTranslation: text(row[3]),
+    dateAdded: text(row[4]) ?? "",
+    language: text(row[5]) ?? "",
+    timesShown: count(row[6]),
+    timesRight: count(row[7]),
+    timesWrong: count(row[8]),
+    lastReviewed: text(row[9]),
+    intervalDays: count(row[10]),
+    dueDate: text(row[11]),
     audioWordEs: text(row[12]),
     audioPhraseEs: text(row[13]),
     audioWordEn: text(row[14]),
@@ -47,8 +79,9 @@ export function rowToWord(row, rowIndex) {
 }
 
 /**
- * Map a Word to the 6-element array for the app-owned columns `F:K`.
- * Nulls become empty cells. User-owned columns (A:E) are never written.
+ * Map a Word to the 6-element array for the app-owned stats block `G:L`.
+ * Nulls become empty cells. Grading writes only this block — user text
+ * columns (A:F) are never touched (ADR-0003).
  * @param {ReturnType<typeof rowToWord>} word
  */
 export function wordToStatsRow(word) {
@@ -63,14 +96,13 @@ export function wordToStatsRow(word) {
 }
 
 /**
- * Map a Word to the 5-element array for the enrichment columns `L:P`.
+ * Map a Word to the 4-element array for the audio-ref columns `M:P`.
  * Nulls become empty cells, which by ADR-0005 mean "missing — generate
  * on next backfill".
  * @param {ReturnType<typeof rowToWord>} word
  */
-export function wordToEnrichmentRow(word) {
+export function wordToAudioRefsRow(word) {
   return [
-    word.phraseTranslation ?? "",
     word.audioWordEs ?? "",
     word.audioPhraseEs ?? "",
     word.audioWordEn ?? "",
@@ -100,9 +132,10 @@ export function wordToNewRow(word) {
     word.word,
     word.translation,
     word.example ?? "",
+    word.phraseTranslation ?? "",
     word.dateAdded,
     word.language,
     ...wordToStatsRow(word),
-    ...wordToEnrichmentRow(word),
+    ...wordToAudioRefsRow(word),
   ];
 }
