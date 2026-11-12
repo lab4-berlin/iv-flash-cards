@@ -16,7 +16,10 @@ export const TTS_MODEL = "gemini-3.8-flash-tts";
 /** Sample rate of the PCM audio Gemini TTS returns. */
 export const SAMPLE_RATE = 24000;
 
-const LANGUAGE_NAMES = { es: "Spanish", en: "English" };
+// BCP-47 codes for speechConfig.languageCode — steers pronunciation without
+// putting instructions into the spoken text (the 3.8 TTS model reads any
+// instruction text aloud, verbatim).
+const LANGUAGE_CODES = { es: "es-ES", en: "en-US" };
 
 /** Any non-OK TTS API response. `status` is the HTTP status code. */
 export class TtsError extends Error {
@@ -47,7 +50,6 @@ export class RateLimitError extends TtsError {
  * @throws {RateLimitError} on 429, {TtsError} on other API failures
  */
 export async function synthesize(key, text, language, voice) {
-  const languageName = LANGUAGE_NAMES[language] ?? language;
   const response = await fetch(`${API_BASE}/${TTS_MODEL}:generateContent`, {
     method: "POST",
     headers: {
@@ -55,16 +57,12 @@ export async function synthesize(key, text, language, voice) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            { text: `Say this naturally in ${languageName}: ${text}` },
-          ],
-        },
-      ],
+      // Bare text only: anything else in the prompt gets spoken verbatim.
+      contents: [{ parts: [{ text }] }],
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: {
+          languageCode: LANGUAGE_CODES[language] ?? language,
           voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
         },
       },
