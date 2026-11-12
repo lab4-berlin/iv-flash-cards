@@ -16,9 +16,11 @@
 //        - uploadClip(filename, blob): Drive upload, resolves with file ID
 //
 // Words are processed sequentially — free-tier rate limits, not throughput,
-// are the constraint (ADR-0004). On a RateLimitError the pipeline backs off
-// (1s/2s/4s/8s), then marks the word failed-retryable and moves on. One
-// word failing never aborts the batch (#27 acceptance).
+// are the constraint (ADR-0004). Within one word, the 4 TTS calls run in
+// parallel and then the 4 uploads run in parallel (#59). On a
+// RateLimitError the pipeline backs off (1s/2s/4s/8s), then marks the word
+// failed-retryable and moves on. One word failing never aborts the batch
+// (#27 acceptance).
 
 import { pickVoice as defaultPickVoice } from "./voices.js";
 import { clipFilename } from "./drive.js";
@@ -216,25 +218,75 @@ export function createImporter({
    */
   async function generateMissingClips(word, onClip) {
     let updated = { ...word };
-    const failures = [];
+    const finalFailures = new Map(); // clip kind → error
     let generated = 0;
-    for (const { kind, field, textField, language } of CLIPS) {
-      const text = updated[textField];
-      if (updated[field] || !text) continue;
-      try {
-        const blob = await withBackoff(
-          () => synthesize(text, language, pickVoice()),
-          sleep,
-        );
-        const filename = clipFilename(updated.rowIndex, updated.word, kind);
-        const fileId = await uploadClip(filename, blob);
-        updated = { ...updated, [field]: fileId };
-        generated++;
-        onClip?.(updated, kind);
-      } catch (error) {
-        failures.push({ kind, error });
+
+    // Parallel passes (issue #59): each pass synthesizes every still-missing
+    // clip with Promise.allSettled, then uploads the resulting blobs the
+    // same way. A RateLimitError on any call rate-limits the whole word:
+    // back off on the shared ladder, then retry only the clips still
+    // missing — succeeded clips are never redone, and non-rate-limit
+    // failures stay final for their clip (same semantics as the
+    // sequential version, #36).
+    for (let attempt = 0; ; attempt++) {
+      const missing = CLIPS.filter(
+        ({ kind, field, textField }) =>
+          !updated[field] && updated[textField] && !finalFailures.has(kind),
+      );
+      if (missing.length === 0) break;
+
+      const rateLimited = new Map(); // clip kind → error, this pass only
+
+      const synthesized = await Promise.allSettled(
+        missing.map(({ textField, language }) =>
+          synthesize(updated[textField], language, pickVoice()),
+        ),
+      );
+      const uploadable = [];
+      for (const [i, result] of synthesized.entries()) {
+        const clip = missing[i];
+        if (result.status === "fulfilled") {
+          uploadable.push({ clip, blob: result.value });
+        } else if (isRateLimit(result.reason)) {
+          rateLimited.set(clip.kind, result.reason);
+        } else {
+          finalFailures.set(clip.kind, result.reason);
+        }
       }
+
+      const uploaded = await Promise.allSettled(
+        uploadable.map(({ clip, blob }) =>
+          uploadClip(clipFilename(updated.rowIndex, updated.word, clip.kind), blob),
+        ),
+      );
+      for (const [i, result] of uploaded.entries()) {
+        const { clip } = uploadable[i];
+        if (result.status === "fulfilled") {
+          updated = { ...updated, [clip.field]: result.value };
+          generated++;
+          onClip?.(updated, clip.kind);
+        } else if (isRateLimit(result.reason)) {
+          rateLimited.set(clip.kind, result.reason);
+        } else {
+          finalFailures.set(clip.kind, result.reason);
+        }
+      }
+
+      // Without a rate limit every clip is now done or failed-final; the
+      // next pass finds nothing missing and exits the loop.
+      if (rateLimited.size === 0) continue;
+      if (attempt >= BACKOFF_DELAYS_MS.length) {
+        // Ladder exhausted — the still-rate-limited clips fail (retryable).
+        for (const [kind, error] of rateLimited) finalFailures.set(kind, error);
+        break;
+      }
+      await sleep(BACKOFF_DELAYS_MS[attempt]);
     }
+
+    // Report failures in CLIPS order, like the sequential version did.
+    const failures = CLIPS.filter(({ kind }) => finalFailures.has(kind)).map(
+      ({ kind }) => ({ kind, error: finalFailures.get(kind) }),
+    );
     if (generated > 0) await writeAudioRefs(updated);
     return { word: updated, failures };
   }
@@ -322,7 +374,7 @@ export function createImporter({
       // Later prompts in this batch may reuse the words imported so far.
       vocab.push(word.word);
 
-      // Phase 2: 4 clips (random voice each) → write M:P file IDs.
+      // Phase 2: 4 clips in parallel (random voice each) → write M:P IDs.
       update(i, transition(items[i], "audio", { rowIndex: word.rowIndex }));
       try {
         const result = await generateMissingClips(word, () =>

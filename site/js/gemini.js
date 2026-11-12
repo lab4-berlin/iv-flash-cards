@@ -145,6 +145,9 @@ export async function enrichWord(key, word, vocabulary) {
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: RESPONSE_SCHEMA,
+        // No thinking for this simple extraction — ~2.5 s faster per word
+        // with identical output quality (measured in issue #59).
+        thinkingConfig: { thinkingBudget: 0 },
       },
     }),
   });
