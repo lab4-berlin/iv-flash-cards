@@ -11,7 +11,7 @@
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Gemini flash model used for text enrichment (ADR-0004). */
-export const MODEL = "gemini-2.5-flash";
+export const MODEL = "gemini-3.8-flash";
 
 /** Any non-OK Gemini API response. `status` is the HTTP status code. */
 export class GeminiError extends Error {

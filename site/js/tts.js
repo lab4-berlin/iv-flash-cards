@@ -11,7 +11,7 @@
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Gemini TTS model (exported so a GA successor is a one-line swap). */
-export const TTS_MODEL = "gemini-2.5-flash-preview-tts";
+export const TTS_MODEL = "gemini-3.8-flash-tts";
 
 /** Sample rate of the PCM audio Gemini TTS returns. */
 export const SAMPLE_RATE = 24000;
@@ -80,13 +80,18 @@ export async function synthesize(key, text, language, voice) {
     );
   }
   const data = await response.json();
-  const base64 = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-  if (!base64) {
+  const inline = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+  if (!inline?.data) {
     throw new TtsError(`Gemini TTS: no audio in response ("${text}")`, 200);
   }
-  return new Blob([pcmToWav(base64ToBytes(base64), SAMPLE_RATE)], {
-    type: "audio/wav",
-  });
+  const bytes = base64ToBytes(inline.data);
+  // Newer TTS models (gemini-3.8-flash-tts) return a complete WAV file;
+  // older ones returned raw PCM that needs the header prepended. Detect by
+  // content, not mime type, so either server behavior works.
+  const isWav = bytes.length >= 4 && bytes[0] === 0x52 && bytes[1] === 0x49 &&
+    bytes[2] === 0x46 && bytes[3] === 0x46; // "RIFF"
+  const wav = isWav ? bytes : pcmToWav(bytes, SAMPLE_RATE);
+  return new Blob([wav], { type: "audio/wav" });
 }
 
 /**
