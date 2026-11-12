@@ -51,6 +51,11 @@ for free:
   simply **clear the matching audio cell(s)**. The next backfill run
   recreates whatever is empty. No other bookkeeping is needed.
 
+The clips themselves live in a folder the app creates in your Google Drive.
+To choose where clips are stored, move or rename the app's audio folder in
+Google Drive — the app finds it regardless (ADR-0007). The sheet never stores
+the folder, only the per-clip file IDs in M–P.
+
 ## Example rows
 
 | | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P |

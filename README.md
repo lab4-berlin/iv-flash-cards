@@ -102,6 +102,14 @@ Notes:
   visible in the deployed page's JS by design; they're only kept out of the
   repo source. The sheet itself stays private behind Google sign-in.
 
+## Audio clips in Google Drive
+
+Generated audio clips live in a folder the app creates in your Google Drive
+(named "IV Flash Cards Audio" at creation). To choose where clips are stored,
+move or rename the app's audio folder in Google Drive — the app finds it
+regardless ([ADR-0007](docs/adr/0007-relocatable-app-owned-audio-folder.md)).
+If you trash the folder, the next import quietly creates a fresh one.
+
 ## Gemini API key (AI features)
 
 AI features (bulk-import enrichment, generated audio — see

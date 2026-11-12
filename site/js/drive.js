@@ -1,9 +1,11 @@
-// Google Drive storage for audio clips — ADR-0005, issue #35.
+// Google Drive storage for audio clips — ADR-0005, ADR-0007, issues #35, #54.
 //
 // Uses the app's OAuth token (NOT the Gemini API key) with the narrow
 // `drive.file` scope: the app only sees files it created. All clips live in
-// one folder, "IV Flash Cards Audio". The sheet's `M:P` cells hold Drive
-// file IDs and are the source of truth; filenames are informational only.
+// one app-created folder, discovered at runtime via a Drive query (ADR-0007)
+// — never by name or stored ID, so the user may freely move and rename the
+// folder in Drive. The sheet's `M:P` cells hold Drive file IDs and are the
+// source of truth; filenames are informational only.
 //
 // Recovery contract matches sheets.js: on `DriveAuthError` the caller does
 // one silent `requestToken()` retry, then surfaces "Reconnect".
@@ -12,7 +14,11 @@ const FILES_API = "https://www.googleapis.com/drive/v3/files";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3/files";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
 
-/** Name of the single Drive folder holding all clips (ADR-0005). */
+/**
+ * Name given to the clips folder when the app creates it (ADR-0007). Only
+ * used at creation time — discovery never matches on the name, so the user
+ * may rename the folder afterwards.
+ */
 export const FOLDER_NAME = "IV Flash Cards Audio";
 
 /** Any non-OK Drive API response. `status` is the HTTP status code. */
@@ -34,9 +40,22 @@ export class DriveAuthError extends DriveError {
 
 let cachedFolderId = null;
 
+/** Forget the cached folder ID (used by tests). */
+export function resetFolderCache() {
+  cachedFolderId = null;
+}
+
 /**
- * Find or create the clips folder and return its ID. The ID is cached in
- * memory for the session, so repeated calls cost nothing.
+ * Discover or create the clips folder and return its ID (ADR-0007).
+ *
+ * Discovery queries Drive for non-trashed folders — under `drive.file` that
+ * can only return folders the app itself created, so no name matching and no
+ * persisted ID are needed, and the user may freely move/rename the folder.
+ * If several exist (historical accident), the oldest by `createdTime` wins.
+ * If none exists, "IV Flash Cards Audio" is created at Drive root.
+ *
+ * The ID is cached in module memory for the session: call once per
+ * import/backfill batch and pass the ID to {@link uploadClip}.
  *
  * @param {string} token OAuth access token (with the `drive.file` scope)
  * @returns {Promise<string>} the folder's Drive file ID
@@ -45,14 +64,16 @@ let cachedFolderId = null;
 export async function ensureFolder(token) {
   if (cachedFolderId) return cachedFolderId;
 
-  const q = encodeURIComponent(
-    `name = '${FOLDER_NAME}' and mimeType = '${FOLDER_MIME}' and trashed = false`,
-  );
+  const params = new URLSearchParams({
+    q: `mimeType='${FOLDER_MIME}' and trashed=false`,
+    fields: "files(id,createdTime)",
+    orderBy: "createdTime",
+  });
   const found = await driveFetch(
     token,
-    `${FILES_API}?q=${q}&fields=files(id)&pageSize=1`,
+    `${FILES_API}?${params}`,
     {},
-    "list folder",
+    "discover folder",
   );
   if (found.files?.length) {
     cachedFolderId = found.files[0].id;
