@@ -51,7 +51,7 @@
   .btn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; width: 100%; }
   .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
 
-  /* home with segmented control */
+  /* home menu */
   .message { text-align: center; max-width: 360px; display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; }
   .message h3 { font-size: 24px; font-weight: 600; }
   .message p { font-size: 16px; line-height: 1.5; color: #666; }
@@ -60,25 +60,20 @@
   .mbtn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   .mbtn.solid { background: #000; color: #FFF; border: 1px solid #000; }
   .mbtn.outline { background: #FFF; color: #000; border: 1px solid #000; }
-  .seg { display: flex; border: 1px solid #000; height: 48px; }
-  .seg .cell { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 600; cursor: pointer; }
-  .seg .cell + .cell { border-left: 1px solid #000; }
-  .seg .cell.sel { background: #000; color: #FFF; }
-  .seg.disabled-right { border-color: #000; }
-  .seg.disabled-right .cell + .cell { border-left-color: #DDD; color: #666; font-weight: 400; cursor: default; }
-  .seg-cap { font-size: 12px; color: #666; letter-spacing: .02em; margin-top: -4px; }
+  .mbtn.disabled { background: #FFF; color: #666; border: 1px solid #DDD; font-weight: 400; cursor: default; }
+  .btn-cap { font-size: 12px; color: #666; letter-spacing: .02em; margin-top: -4px; }
   .keys { font-size: 12px; color: #666; letter-spacing: .08em; margin-top: 8px; }
 </style>
 </head>
 <body>
 
 <h1>Multiple-Choice Mode — Mockups (issue #31)</h1>
-<div class="gallery-sub">Mode picker on Home · question · correct / wrong feedback · unavailable state · spec: design/multiple-choice.md</div>
+<div class="gallery-sub">Entry point on Home · question · correct / wrong feedback · unavailable state · spec: design/multiple-choice.md</div>
 
-<!-- ============ MODE PICKER ============ -->
+<!-- ============ ENTRY POINT ============ -->
 <div class="state">
-  <h2>1 · Mode picker on Home</h2>
-  <p>Segmented control under the Review button: "Cards" (classic) | "Choices". Selection is remembered; Review starts the session in the selected mode. Same placement under "Review ahead" when nothing is due.</p>
+  <h2>1 · Entry point on Home</h2>
+  <p>No picker: "Choices" is a full-width button on the home menu, same size as the others, and starts a multiple-choice session directly. "Cards" starts a classic session. Spec: design/home-screen.md.</p>
   <div class="frames">
     <div>
       <div class="frame-label">Mobile · 375</div>
@@ -88,8 +83,8 @@
             <h3>IV Flash Cards</h3>
             <p>14 due · 87 words</p>
             <div class="menu">
-              <div class="mbtn solid">Review</div>
-              <div class="seg"><div class="cell">Cards</div><div class="cell sel">Choices</div></div>
+              <div class="mbtn solid">Cards</div>
+              <div class="mbtn outline">Choices</div>
               <div class="mbtn outline">Listen</div>
               <div class="mbtn outline">Import words</div>
             </div>
@@ -105,12 +100,12 @@
             <h3>IV Flash Cards</h3>
             <p>14 due · 87 words</p>
             <div class="menu">
-              <div class="mbtn solid">Review</div>
-              <div class="seg"><div class="cell">Cards</div><div class="cell sel">Choices</div></div>
+              <div class="mbtn solid">Cards</div>
+              <div class="mbtn outline">Choices</div>
               <div class="mbtn outline">Listen</div>
               <div class="mbtn outline">Import words</div>
             </div>
-            <div class="keys">enter · M · L · I</div>
+            <div class="keys">enter · C · L · I</div>
           </div>
         </div>
       </div></div>
@@ -273,7 +268,7 @@
 <!-- ============ UNAVAILABLE ============ -->
 <div class="state">
   <h2>5 · Mode unavailable (fewer than 4 words)</h2>
-  <p>"Choices" cell disabled (hairline divider, muted text) with a persistent caption. Classic review unaffected.</p>
+  <p>"Choices" button disabled (hairline border, muted text) with a persistent caption under it. Classic review unaffected.</p>
   <div class="frames">
     <div>
       <div class="frame-label">Mobile · 375</div>
@@ -283,9 +278,9 @@
             <h3>IV Flash Cards</h3>
             <p>3 due · 3 words</p>
             <div class="menu">
-              <div class="mbtn solid">Review</div>
-              <div class="seg disabled-right"><div class="cell sel">Cards</div><div class="cell">Choices</div></div>
-              <div class="seg-cap">Choices needs at least 4 words</div>
+              <div class="mbtn solid">Cards</div>
+              <div class="mbtn disabled">Choices</div>
+              <div class="btn-cap">Choices needs at least 4 words</div>
               <div class="mbtn outline">Listen</div>
               <div class="mbtn outline">Import words</div>
             </div>

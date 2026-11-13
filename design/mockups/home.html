@@ -28,17 +28,19 @@
   .btn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; }
   .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
   .btn.outline { background: #FFF; color: #000; border: 1px solid #000; }
+  .btn.disabled { background: #FFF; color: #666; border: 1px solid #DDD; font-weight: 400; cursor: default; }
+  .btn-cap { font-size: 12px; color: #666; letter-spacing: .02em; margin-top: -4px; }
   .keys { font-size: 12px; color: #666; letter-spacing: .08em; margin-top: 8px; }
 </style>
 </head>
 <body>
 
 <h1>Home Screen — Mockups</h1>
-<div class="gallery-sub">New top-level screen for the V2 milestone · entry points for Review (#2), Listen (#29), Import (#27) · spec: design/home-screen.md</div>
+<div class="gallery-sub">New top-level screen for the V2 milestone · entry points for Cards (#2), Choices (#31), Listen (#29), Import (#27) · spec: design/home-screen.md</div>
 
 <div class="state">
   <h2>1 · Default (words due)</h2>
-  <p>Sign-in lands here instead of auto-starting review. Review is the solid action. Web shows keyboard shortcuts.</p>
+  <p>Sign-in lands here instead of auto-starting review. Four equal buttons, each starting its mode directly; Cards is the solid action. Web shows keyboard shortcuts.</p>
   <div class="frames">
     <div>
       <div class="frame-label">Mobile · 375</div>
@@ -48,7 +50,8 @@
             <h3>IV Flash Cards</h3>
             <p>14 due · 87 words</p>
             <div class="menu">
-              <div class="btn solid">Review</div>
+              <div class="btn solid">Cards</div>
+              <div class="btn outline">Choices</div>
               <div class="btn outline">Listen</div>
               <div class="btn outline">Import words</div>
             </div>
@@ -64,11 +67,12 @@
             <h3>IV Flash Cards</h3>
             <p>14 due · 87 words</p>
             <div class="menu">
-              <div class="btn solid">Review</div>
+              <div class="btn solid">Cards</div>
+              <div class="btn outline">Choices</div>
               <div class="btn outline">Listen</div>
               <div class="btn outline">Import words</div>
             </div>
-            <div class="keys">enter · L · I</div>
+            <div class="keys">enter · C · L · I</div>
           </div>
         </div>
       </div></div>
@@ -78,7 +82,7 @@
 
 <div class="state">
   <h2>2 · Nothing due</h2>
-  <p>When 0 words are due, Listen becomes the solid button and Review turns into outline "Review ahead".</p>
+  <p>When 0 words are due, Listen becomes the solid button; Cards and Choices turn outline. Order and labels don't change — the status line explains that a session would be reviewing ahead.</p>
   <div class="frames">
     <div>
       <div class="frame-label">Mobile · 375</div>
@@ -88,8 +92,9 @@
             <h3>IV Flash Cards</h3>
             <p>Nothing due · next 12 tomorrow</p>
             <div class="menu">
+              <div class="btn outline">Cards</div>
+              <div class="btn outline">Choices</div>
               <div class="btn solid">Listen</div>
-              <div class="btn outline">Review ahead</div>
               <div class="btn outline">Import words</div>
             </div>
           </div>
@@ -104,11 +109,12 @@
             <h3>IV Flash Cards</h3>
             <p>Nothing due · next 12 tomorrow</p>
             <div class="menu">
+              <div class="btn outline">Cards</div>
+              <div class="btn outline">Choices</div>
               <div class="btn solid">Listen</div>
-              <div class="btn outline">Review ahead</div>
               <div class="btn outline">Import words</div>
             </div>
-            <div class="keys">enter · L · I</div>
+            <div class="keys">enter · C · L · I</div>
           </div>
         </div>
       </div></div>
@@ -117,7 +123,32 @@
 </div>
 
 <div class="state">
-  <h2>3 · Empty sheet</h2>
+  <h2>3 · Choices unavailable (fewer than 4 words)</h2>
+  <p>The Choices button is disabled (hairline border, muted text) with a persistent caption under it. Combines with the other states.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>IV Flash Cards</h3>
+            <p>3 due · 3 words</p>
+            <div class="menu">
+              <div class="btn solid">Cards</div>
+              <div class="btn disabled">Choices</div>
+              <div class="btn-cap">Choices needs at least 4 words</div>
+              <div class="btn outline">Listen</div>
+              <div class="btn outline">Import words</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<div class="state">
+  <h2>4 · Empty sheet</h2>
   <p>Import is now the primary fix for an empty vocabulary; opening the sheet stays as secondary.</p>
   <div class="frames">
     <div>

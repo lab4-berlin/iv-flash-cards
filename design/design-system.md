@@ -81,6 +81,10 @@ width; "Knew it" is solid (most frequent action), "Didn't know" is outline.
 ### Secondary / outline button
 `1px solid ink` border, `ink` text on `paper`. Same metrics as primary.
 
+Disabled (either style): `hairline` border, `muted` text at regular weight,
+non-interactive — with a persistent `muted` caption directly below the
+button explaining why (e.g. "Choices needs at least 4 words" on Home).
+
 ### Icon button (speaker)
 32×32px icon inside a 48×48px hit area, `1px solid ink` circle optional —
 default is borderless glyph. Disabled: glyph in `hairline`, non-interactive,
@@ -108,13 +112,6 @@ glyphs are text-sized, monochrome:
 | `—` (muted) | skipped (with caption, e.g. "already in list") |
 | "generating…" (muted caption, no glyph) | in progress |
 | word itself in `muted` | pending, not yet started |
-
-### Segmented control
-A row of equal-width cells, `1px solid ink` outer border, hairline dividers
-between cells, 48px height, button typography. Selected cell: solid `ink`
-with `paper` text. Disabled cell: `hairline` border/divider, `muted` text,
-non-interactive — with a persistent `muted` caption below the control
-explaining why. Used for the review-mode picker on Home.
 
 ### Option button (multiple-choice mode)
 Metrics of the standard button (48px min height, 16px/600), outline style,

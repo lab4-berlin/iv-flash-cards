@@ -5,35 +5,34 @@ English options. Queue, scheduler, and stats are untouched — correct pick =
 "Knew it", wrong pick = "Didn't know". Mockups:
 `design/mockups/choice.html` (mobile 375 + web 820 frames for every state).
 
-## Mode picker (session start)
+## Entry point (session start)
 
-The picker lives on the **home screen** (`home-screen.md`), as a two-cell
-segmented control directly under the Review button:
+The mode is started directly from the **home screen** (`home-screen.md`):
+there is no picker. Two full-width buttons, same size as the rest of the
+menu, each starting a session immediately:
 
 ```
 ┌──────────────────────┐
-│        Review        │   ← solid button, starts the session
+│       ■ Cards        │   ← solid, starts a classic session
 └──────────────────────┘
-┌──────────┬───────────┐
-│  Cards   │ ■ Choices │   ← segmented control, selected cell solid
-└──────────┴───────────┘
+┌──────────────────────┐
+│       Choices        │   ← outline, starts a multiple-choice session
+└──────────────────────┘
 ```
 
-- Labels: **Cards** (classic) and **Choices** (multiple choice).
-- The selected cell is solid ink with paper text; tapping a cell selects it,
-  tapping Review starts the session in the selected mode. One mode per
-  session, per the issue.
-- The selection is **remembered across sessions** (dev note: localStorage;
-  default "Cards").
-- In the nothing-due state the control sits under "Review ahead" the same
-  way. Listen/Import are unaffected.
+- Labels: **Cards** (classic) and **Choices** (multiple choice). One mode
+  per session, per the issue.
+- Nothing is selected or remembered — tapping a button *is* the choice.
+  (The old localStorage mode memory is removed.)
+- In the nothing-due state both buttons turn outline and Listen becomes
+  the solid action; see `home-screen.md` states.
 - **Unavailable:** with fewer than 4 words with distinct translations, the
-  "Choices" cell is disabled (hairline border, muted text) and selecting it
-  is impossible; a muted caption under the control explains: "Choices needs
+  Choices button is disabled (hairline border, muted text) and tapping it
+  does nothing; a muted caption directly under it explains: "Choices needs
   at least 4 words". The caption is always visible while disabled — not a
   tap-to-discover hint.
-- Keyboard (web): `M` toggles the mode; `Enter`/`Space` starts Review as
-  before.
+- Keyboard (web): `C` starts Choices; `Enter`/`Space` starts the solid
+  action (Cards by default).
 
 ## Question screen
 
@@ -86,7 +85,7 @@ first tunable to revisit.
 | Question | Word + 4 outline options. |
 | Answered — correct | Picked option solid `✓`; others faded; phrase shown; Next. |
 | Answered — wrong | Picked `✕` struck through; correct solid `✓`; other two faded; phrase shown; Next. |
-| Mode unavailable | Disabled "Choices" cell + persistent caption on home. |
+| Mode unavailable | Disabled "Choices" button + persistent caption on home. |
 | End of session / nothing due / empty / sync banner | Identical to classic review — no new designs needed. |
 
 ## Distractor rules (restating the issue for dev)
