@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockups — Onboarding / First Run (issue #62)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F4F4F4; color: #000; padding: 40px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .gallery-sub { font-size: 13px; color: #666; margin-bottom: 40px; }
+  .state { margin-bottom: 56px; }
+  .state > h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .state > p { font-size: 13px; color: #666; margin-bottom: 16px; max-width: 720px; }
+  .frames { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .frame-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .phone, .desktop { border: 1px solid #000; background: #FFF; overflow: hidden; }
+  .phone { width: 375px; height: 640px; }
+  .desktop { width: 820px; height: 560px; }
+  .screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+  .stage { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 16px; }
+  .message { text-align: center; max-width: 360px; display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; }
+  .message h3 { font-size: 24px; font-weight: 600; }
+  .message p { font-size: 16px; line-height: 1.5; color: #666; }
+  .step-cap { font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #666; }
+  .menu { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-top: 20px; }
+  .desktop .menu { width: 280px; }
+  .btn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
+  .btn.outline { background: #FFF; color: #000; border: 1px solid #000; }
+  .btn.disabled { background: #FFF; color: #666; border: 1px solid #DDD; font-weight: 400; cursor: default; }
+  .btn-cap { font-size: 12px; color: #666; letter-spacing: .02em; line-height: 1.5; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Onboarding / First Run — Mockups (issue #62)</h1>
+<div class="gallery-sub">First sign-in only: setting up → language (step 1 of 2) → AI key offer (step 2 of 2) → Home empty state · returning users see none of it · spec: design/onboarding.md · the key guide itself: design/mockups/key-setup.html (#64)</div>
+
+<!-- ============ SETTING UP ============ -->
+<div class="state">
+  <h2>1 · Setting up (sheet find-or-create)</h2>
+  <p>Blocking message while the app creates the user's sheet in their own Drive. No spinner — the copy says it takes seconds and stays true if it takes longer. Skipped entirely when discovery finds an existing sheet fast.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div id="m-setup" class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>Setting up your word list&hellip;</h3>
+            <p>Your words live in a Google Sheet in your own Drive. The app is creating it for you &mdash; a few seconds.</p>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>Setting up your word list&hellip;</h3>
+            <p>Your words live in a Google Sheet in your own Drive. The app is creating it for you &mdash; a few seconds.</p>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LANGUAGE ============ -->
+<div class="state">
+  <h2>2 · Language (step 1 of 2)</h2>
+  <p>Curated list, option-button component; tap selects (solid), Continue commits — selection alone doesn't advance because changing the language later is out of scope. Continue is disabled (hairline) until a selection exists. Keyboard (web): ↑/↓ select, Enter continues.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375 — nothing selected</div>
+      <div class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <div class="step-cap">Step 1 of 2</div>
+            <h3>Which language are you learning?</h3>
+            <div class="menu">
+              <div class="btn outline">Spanish</div>
+              <div class="btn outline">French</div>
+              <div class="btn outline">German</div>
+              <div class="btn outline">Italian</div>
+              <div class="btn outline">Portuguese</div>
+              <div class="btn outline">English</div>
+              <div class="btn disabled">Continue</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Mobile · 375 — Spanish selected</div>
+      <div id="m-lang" class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <div class="step-cap">Step 1 of 2</div>
+            <h3>Which language are you learning?</h3>
+            <div class="menu">
+              <div class="btn solid">Spanish</div>
+              <div class="btn outline">French</div>
+              <div class="btn outline">German</div>
+              <div class="btn outline">Italian</div>
+              <div class="btn outline">Portuguese</div>
+              <div class="btn outline">English</div>
+              <div class="btn solid" style="margin-top:8px">Continue</div>
+              <div class="btn-cap">Stored in your sheet, so it follows you on every device</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820 — Spanish selected</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <div class="step-cap">Step 1 of 2</div>
+            <h3>Which language are you learning?</h3>
+            <div class="menu">
+              <div class="btn solid">Spanish</div>
+              <div class="btn outline">French</div>
+              <div class="btn outline">German</div>
+              <div class="btn outline">Italian</div>
+              <div class="btn outline">Portuguese</div>
+              <div class="btn outline">English</div>
+              <div class="btn solid" style="margin-top:8px">Continue</div>
+              <div class="btn-cap">Stored in your sheet, so it follows you on every device</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ KEY OFFER ============ -->
+<div class="state">
+  <h2>3 · AI key offer (step 2 of 2)</h2>
+  <p>Optional and skippable; "Set up the free key" opens the guide (key-setup.html). Skipping is a first-class outline button, not an escape link — review must feel fully intentional without a key. Shown only in this session; closing the tab counts as skipping.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div id="m-offer" class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <div class="step-cap">Step 2 of 2</div>
+            <h3>One more thing &mdash; AI&nbsp;features</h3>
+            <p>Importing new words and natural audio run on Google's AI. That needs a free key from your Google account &mdash; the app will walk you through it.</p>
+            <div class="menu">
+              <div class="btn solid">Set up the free key</div>
+              <div class="btn outline">Skip for now</div>
+              <div class="btn-cap">You can do this anytime later from Import.<br>Reviewing cards works without a key.</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <div class="step-cap">Step 2 of 2</div>
+            <h3>One more thing &mdash; AI&nbsp;features</h3>
+            <p>Importing new words and natural audio run on Google's AI. That needs a free key from your Google account &mdash; the app will walk you through it.</p>
+            <div class="menu">
+              <div class="btn solid">Set up the free key</div>
+              <div class="btn outline">Skip for now</div>
+              <div class="btn-cap">You can do this anytime later from Import.<br>Reviewing cards works without a key.</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SETUP FAILED ============ -->
+<div class="state">
+  <h2>4 · Setup failed (blocking error + retry)</h2>
+  <p>Sheet creation/discovery or the language write failed. Reuses the existing blocking startup-error pattern verbatim; Retry re-runs the failed step. No skip — a half-created setup never leaks onto Home.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div id="m-fail" class="phone"><div class="screen">
+        <div class="stage">
+          <div class="message">
+            <h3>Couldn't set things up</h3>
+            <p>Check your connection and try again. Nothing is lost.</p>
+            <div class="menu">
+              <div class="btn solid">Retry</div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

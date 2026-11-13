@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockups — Guided Gemini Key Setup (issue #64)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #F4F4F4; color: #000; padding: 40px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .gallery-sub { font-size: 13px; color: #666; margin-bottom: 40px; }
+  .state { margin-bottom: 56px; }
+  .state > h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
+  .state > p { font-size: 13px; color: #666; margin-bottom: 16px; max-width: 720px; }
+  .frames { display: flex; gap: 32px; align-items: flex-start; flex-wrap: wrap; }
+  .frame-label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+  .phone, .desktop { border: 1px solid #000; background: #FFF; overflow: hidden; }
+  .phone { width: 375px; height: 640px; }
+  .desktop { width: 820px; height: 560px; }
+  .screen { width: 100%; height: 100%; display: flex; flex-direction: column; }
+
+  /* header */
+  .screen-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 8px 16px; }
+  .screen-title { font-size: 12px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: #666; }
+  .close { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; }
+
+  .content { flex: 1; display: flex; flex-direction: column; padding: 0 16px 16px; gap: 12px; overflow: hidden; }
+  .desktop .content { max-width: 560px; width: 100%; margin: 0 auto; }
+
+  .intro { font-size: 15px; line-height: 1.45; color: #666; }
+
+  /* numbered steps */
+  .steps { display: flex; flex-direction: column; gap: 10px; }
+  .step { display: flex; gap: 12px; }
+  .step .n { font-size: 16px; font-weight: 600; width: 16px; flex: none; }
+  .step .t { font-size: 15px; line-height: 1.4; }
+  .step .t .cap { display: block; font-size: 12px; color: #666; letter-spacing: .02em; margin-top: 2px; }
+  .step .t .mini { margin-top: 8px; }
+
+  .btn { min-height: 48px; font-size: 16px; font-weight: 600; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0 20px; }
+  .btn.solid { background: #000; color: #FFF; border: 1px solid #000; }
+  .btn.outline { background: #FFF; color: #000; border: 1px solid #000; }
+  .btn.full { width: 100%; }
+  .btn.disabled { border: 1px solid #DDD; color: #666; background: #FFF; font-weight: 400; cursor: default; }
+  .btn-cap { font-size: 12px; color: #666; letter-spacing: .02em; line-height: 1.5; text-align: center; }
+  .link-cap { font-size: 12px; color: #666; letter-spacing: .08em; text-align: center; text-decoration: underline; padding: 8px 0; cursor: pointer; }
+
+  .key-input { border: 1px solid #000; padding: 14px 16px; font: 400 16px/1.4 inherit; font-family: inherit; color: #666; }
+  .key-input.filled { color: #000; letter-spacing: .04em; }
+
+  /* validation verdicts */
+  .verdict { display: flex; flex-direction: column; gap: 4px; }
+  .verdict .lead { font-size: 16px; font-weight: 600; }
+  .verdict .why { font-size: 14px; line-height: 1.45; color: #666; }
+
+  /* manage state */
+  .masked { font-size: 20px; font-weight: 600; letter-spacing: .08em; padding: 8px 0; }
+  .message { text-align: center; max-width: 320px; display: flex; flex-direction: column; gap: 12px; align-items: center; width: 100%; margin: auto; }
+  .message h3 { font-size: 24px; font-weight: 600; }
+  .message p { font-size: 16px; line-height: 1.5; color: #666; }
+
+  /* inverted (listen) */
+  .inv { background: #000; color: #FFF; }
+  .inv .message p { color: #999; }
+  .inv .btn.inv-outline { background: #000; color: #FFF; border: 1px solid #FFF; }
+  .inv .close { color: #FFF; }
+</style>
+</head>
+<body>
+
+<h1>Guided Gemini Key Setup — Mockups (issue #64)</h1>
+<div class="gallery-sub">One-screen guide for a user who has never heard "API key" · three distinct validation states · manage (replace/remove) · blocked invitation states on Import and Listen · spec: design/key-setup.md · reached from onboarding step 2 (design/mockups/onboarding.html, #62) or from any blocked AI feature</div>
+
+<!-- ============ GUIDE ============ -->
+<div class="state">
+  <h2>1 · The guide (no key yet)</h2>
+  <p>Everything on one screen, in task order: why → four numbered steps → paste → check. Steps quote Google's own button labels; our copy never says "API key" standalone. "Check my key" is disabled while the field is empty.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div id="m-guide" class="phone"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Free Google AI key</span><span class="close">&#10005;</span></div>
+        <div class="content">
+          <div class="intro">Importing words and natural audio run on Google's AI. Google gives every account a free key for it. You create it once on Google's site and paste it here &mdash; about 2&nbsp;minutes.</div>
+          <div class="steps">
+            <div class="step"><span class="n">1</span><div class="t">Open Google AI Studio and sign in with your Google account.
+              <div class="mini"><span class="btn outline" style="min-height:40px; display:inline-flex; font-size:14px;">Open aistudio.google.com</span></div>
+            </div></div>
+            <div class="step"><span class="n">2</span><div class="t">Click &ldquo;Get API key&rdquo;, then &ldquo;Create API key&rdquo;.
+              <span class="cap">Buttons may be worded slightly differently &mdash; look for &ldquo;API key&rdquo;.</span>
+            </div></div>
+            <div class="step"><span class="n">3</span><div class="t">Copy the key &mdash; a long jumble of letters and numbers starting with AIza.</div></div>
+            <div class="step"><span class="n">4</span><div class="t">Come back here and paste it below.</div></div>
+          </div>
+          <div style="flex:1"></div>
+          <div class="key-input">Paste your key here (AIza&hellip;)</div>
+          <div class="btn disabled full">Check my key</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Free Google AI key</span><span class="close">&#10005;</span></div>
+        <div class="content">
+          <div class="intro">Importing words and natural audio run on Google's AI. Google gives every account a free key for it. You create it once on Google's site and paste it here &mdash; about 2&nbsp;minutes.</div>
+          <div class="steps">
+            <div class="step"><span class="n">1</span><div class="t">Open Google AI Studio and sign in with your Google account.
+              <div class="mini"><span class="btn outline" style="min-height:40px; display:inline-flex; font-size:14px;">Open aistudio.google.com</span></div>
+            </div></div>
+            <div class="step"><span class="n">2</span><div class="t">Click &ldquo;Get API key&rdquo;, then &ldquo;Create API key&rdquo;.
+              <span class="cap">Buttons may be worded slightly differently &mdash; look for &ldquo;API key&rdquo;.</span>
+            </div></div>
+            <div class="step"><span class="n">3</span><div class="t">Copy the key &mdash; a long jumble of letters and numbers starting with AIza.</div></div>
+            <div class="step"><span class="n">4</span><div class="t">Come back here and paste it below.</div></div>
+          </div>
+          <div style="flex:1"></div>
+          <div class="key-input">Paste your key here (AIza&hellip;)</div>
+          <div class="btn disabled full">Check my key</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ VALIDATION ============ -->
+<div class="state">
+  <h2>2 · Validation — three distinct outcomes (+ checking)</h2>
+  <p>Only "ok" gets ✓; only "invalid" gets ✕ and talks about the key's content; "network-error" has no verdict glyph and explicitly exonerates the key. On "ok" the field collapses into the success block and the button becomes "Done".</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile — checking</div>
+      <div class="phone" style="height:360px"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Free Google AI key</span><span class="close">&#10005;</span></div>
+        <div class="content" style="justify-content:flex-end">
+          <div class="key-input filled">AIzaSyD4k9&hellip;mQ3kfQ</div>
+          <div class="verdict"><span class="why">Checking with Google&hellip;</span></div>
+          <div class="btn disabled full">Check my key</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Mobile — "ok": it works</div>
+      <div id="m-ok" class="phone" style="height:360px"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Free Google AI key</span><span class="close">&#10005;</span></div>
+        <div class="content" style="justify-content:flex-end">
+          <div class="verdict">
+            <span class="lead">&#10003; It works!</span>
+            <span class="why">Import and Listen are unlocked. The key is saved only on this device &mdash; on another phone or computer you'll paste it there once too.</span>
+          </div>
+          <div class="btn solid full">Done</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+  <div class="frames" style="margin-top:32px">
+    <div>
+      <div class="frame-label">Mobile — "invalid": not accepted</div>
+      <div id="m-invalid" class="phone" style="height:360px"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Free Google AI key</span><span class="close">&#10005;</span></div>
+        <div class="content" style="justify-content:flex-end">
+          <div class="key-input filled">AIzaSyD4k9&hellip;mQ3kf</div>
+          <div class="verdict">
+            <span class="lead">&#10005; Google didn't accept this key.</span>
+            <span class="why">Check that you copied the whole key &mdash; it starts with AIza and has no spaces around it. Still stuck? Create a fresh key in AI Studio (step 2) and paste that one.</span>
+          </div>
+          <div class="btn solid full">Check my key</div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Mobile — "network-error": couldn't check</div>
+      <div id="m-network" class="phone" style="height:360px"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Free Google AI key</span><span class="close">&#10005;</span></div>
+        <div class="content" style="justify-content:flex-end">
+          <div class="key-input filled">AIzaSyD4k9&hellip;mQ3kfQ</div>
+          <div class="verdict">
+            <span class="lead">Couldn't check the key.</span>
+            <span class="why">We couldn't reach Google &mdash; that's a connection problem, not your key. Check your internet and try again.</span>
+          </div>
+          <div class="btn solid full">Try again</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MANAGE ============ -->
+<div class="state">
+  <h2>3 · Manage a saved key (replace / remove)</h2>
+  <p>Same screen, reached from "Change key" on Import step 1; the numbered guide is hidden. Replace reveals the paste field + Check — the old key survives until a new one validates "ok". Remove needs no confirmation (recovery is pasting again) and returns Import/Listen to the blocked invitation states.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div id="m-manage" class="phone"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Free Google AI key</span><span class="close">&#10005;</span></div>
+        <div class="content">
+          <div class="message">
+            <h3>Your AI key</h3>
+            <p>A key is saved on this device.</p>
+            <div class="masked">AIza&middot;&middot;&middot;&middot;&middot;&middot;&middot;&middot;&middot;&middot;&middot;&middot;3kfQ</div>
+            <p>It's used when you import words and to create audio. Saved only on this device &mdash; other devices need it pasted once too.</p>
+            <div class="btn outline full" style="width:100%">Replace key</div>
+            <div class="link-cap">Remove key</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ IMPORT BLOCKED ============ -->
+<div class="state">
+  <h2>4 · Import blocked — invitation, not error</h2>
+  <p>Replaces today's technical "Gemini API key" sub-screen. Calm copy, a time estimate, one primary button into the guide; the caption reassures that review is unaffected. After a validated key, Import continues to step 1 without a reload.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375</div>
+      <div id="m-import" class="phone"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">&#10005;</span></div>
+        <div class="content" style="justify-content:center; align-items:center;">
+          <div class="message">
+            <h3>Import uses Google's AI</h3>
+            <p>Translating words and creating audio needs a free AI key from your Google account. The app walks you through getting one &mdash; about 2&nbsp;minutes.</p>
+            <div class="btn solid full" style="width:100%">Set up the free key</div>
+            <div class="btn-cap">Reviewing your cards works without it.</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div>
+      <div class="frame-label">Web · 820</div>
+      <div class="desktop"><div class="screen">
+        <div class="screen-head"><span class="screen-title">Import words</span><span class="close">&#10005;</span></div>
+        <div class="content" style="justify-content:center; align-items:center;">
+          <div class="message">
+            <h3>Import uses Google's AI</h3>
+            <p>Translating words and creating audio needs a free AI key from your Google account. The app walks you through getting one &mdash; about 2&nbsp;minutes.</p>
+            <div class="btn solid" style="width:280px">Set up the free key</div>
+            <div class="btn-cap">Reviewing your cards works without it.</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LISTEN BLOCKED ============ -->
+<div class="state">
+  <h2>5 · Listen blocked — inverted invitation</h2>
+  <p>No key and nothing playable: takes the place of the empty state, whose "Import words" CTA would dead-end into the import blocked state — route to the actual fix instead. The guide itself always opens in the normal palette. If complete clips exist (key removed later), Listen plays them — playback needs no key.</p>
+  <div class="frames">
+    <div>
+      <div class="frame-label">Mobile · 375 · inverted</div>
+      <div id="m-listen" class="phone inv"><div class="screen">
+        <div class="screen-head"><span class="close">&#10005;</span><span></span></div>
+        <div class="content" style="justify-content:center; align-items:center;">
+          <div class="message">
+            <h3>Nothing to listen to yet</h3>
+            <p>Audio is created when you import words &mdash; and that needs a free Google AI key. About 2&nbsp;minutes to set up.</p>
+            <div class="btn inv-outline full" style="width:100%">Set up the free key</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
