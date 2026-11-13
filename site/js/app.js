@@ -63,13 +63,12 @@ const els = {
   btnClose: $("btn-close"),
   linkSheet: $("link-sheet"),
   homeStatus: $("home-status"),
-  btnReview: $("btn-review"),
+  btnCards: $("btn-cards"),
+  btnChoices: $("btn-choices"),
+  choicesCaption: $("choices-caption"),
   btnListen: $("btn-listen"),
   btnImport: $("btn-import"),
   btnImportEmpty: $("btn-import-empty"),
-  modeCards: $("mode-cards"),
-  modeChoices: $("mode-choices"),
-  modeCaption: $("mode-caption"),
   doneStats: $("done-stats"),
   doneWarn: $("done-warn"),
   choiceBack: $("choice-back"),
@@ -277,23 +276,28 @@ function homeStatusText(dueCount, today) {
 }
 
 /**
- * Render Home from the current (locally graded) word list. In the
- * nothing-due state the Review row becomes outline "Review ahead" and
- * Listen becomes the solid button; order never changes (spec).
+ * Render Home from the current (locally graded) word list: four equal
+ * direct-action buttons (issue #69). In the nothing-due state Listen
+ * becomes the solid button and Cards turns outline; labels and order
+ * never change. Choices disables (with a persistent caption) while the
+ * vocabulary can't fill a 4-option question.
  */
 function showHome() {
   session = null;
   const today = localToday();
   const dueCount = buildQueue(words, today).length;
   const nothingDue = dueCount === 0;
+  const available = choicesAvailable(words);
 
   els.homeStatus.textContent = homeStatusText(dueCount, today);
-  els.btnReview.textContent = nothingDue ? "Review ahead" : "Review";
-  els.btnReview.classList.toggle("solid", !nothingDue);
-  els.btnReview.classList.toggle("outline", nothingDue);
+  els.btnCards.classList.toggle("solid", !nothingDue);
+  els.btnCards.classList.toggle("outline", nothingDue);
   els.btnListen.classList.toggle("solid", nothingDue);
   els.btnListen.classList.toggle("outline", !nothingDue);
-  renderModePicker();
+  els.btnChoices.classList.toggle("outline", available);
+  els.btnChoices.classList.toggle("disabled", !available);
+  els.btnChoices.disabled = !available;
+  els.choicesCaption.hidden = available;
   showState("state-home");
 }
 
@@ -372,58 +376,32 @@ function openListen() {
   listenScreen.open();
 }
 
-// ------------------------------------------- review-mode picker (issue #31)
-
-const MODE_KEY = "iv-review-mode";
-let reviewMode = localStorage.getItem(MODE_KEY) === "choices" ? "choices" : "cards";
-
-function setMode(mode) {
-  reviewMode = mode;
-  localStorage.setItem(MODE_KEY, mode);
-  renderModePicker();
-}
-
-function renderModePicker() {
-  const available = choicesAvailable(words);
-  if (!available && reviewMode === "choices") {
-    reviewMode = "cards";
-    localStorage.setItem(MODE_KEY, "cards");
-  }
-
-  els.modeCards.classList.toggle("selected", reviewMode === "cards");
-  els.modeChoices.classList.toggle("selected", reviewMode === "choices");
-  els.modeCards.setAttribute("aria-checked", String(reviewMode === "cards"));
-  els.modeChoices.setAttribute("aria-checked", String(reviewMode === "choices"));
-  els.modeChoices.classList.toggle("disabled", !available);
-  els.modeChoices.setAttribute("aria-disabled", String(!available));
-
-  els.modeCaption.hidden = available;
-  els.modeCaption.textContent = "Choices needs at least 4 words";
-}
-
-function toggleMode() {
-  if (reviewMode === "cards" && !choicesAvailable(words)) return;
-  setMode(reviewMode === "cards" ? "choices" : "cards");
-}
-
 // ------------------------------------------------------------ session start
 
 /**
- * Start a review session from Home: the due queue, or — when nothing is
- * due — the review-ahead queue (issue #42). Grading ahead-of-schedule
- * words uses the normal rules.
+ * Start a review session from Home in the given mode ("cards" or
+ * "choices"): the due queue, or — when nothing is due — the review-ahead
+ * queue (issue #42). Grading ahead-of-schedule words uses the normal
+ * rules. One mode per session (issue #31); tapping the button *is* the
+ * choice — nothing is selected or remembered (issue #69).
  */
-function startReview() {
+function startSession(mode) {
   const today = localToday();
   let queue = buildQueue(words, today);
   if (queue.length === 0) queue = buildAheadQueue(words, today);
   if (queue.length === 0) return; // unreachable while Home requires words
 
-  // One mode per session (issue #31) — picked on Home, fixed here.
-  session = { queue, today, knew: 0, didnt: 0, mode: reviewMode };
-  if (session.mode === "choices") renderChoice();
+  session = { queue, today, knew: 0, didnt: 0, mode };
+  if (mode === "choices") renderChoice();
   else renderCard();
   showState("card");
+}
+
+/** Choices needs 4 distinct translations; the button is disabled below
+ *  that, but the keyboard shortcut must check too. */
+function startChoices() {
+  if (!choicesAvailable(words)) return;
+  startSession("choices");
 }
 
 // ------------------------------------------------------------------- grading
@@ -640,15 +618,11 @@ els.btnDone.addEventListener("click", () => loadAndBegin()); // refetch, lands H
 // Home navigation (issue #42). ✕ abandons the current card ungraded; words
 // already graded this session keep their (optimistically written) state.
 els.btnClose.addEventListener("click", () => showHome());
-els.btnReview.addEventListener("click", () => startReview());
+els.btnCards.addEventListener("click", () => startSession("cards"));
+els.btnChoices.addEventListener("click", () => startChoices());
 els.btnListen.addEventListener("click", () => openListen());
 els.btnImport.addEventListener("click", () => openImport());
 els.btnImportEmpty.addEventListener("click", () => openImport());
-
-els.modeCards.addEventListener("click", () => setMode("cards"));
-els.modeChoices.addEventListener("click", () => {
-  if (choicesAvailable(words)) setMode("choices");
-});
 
 els.btnSignin.addEventListener("click", async () => {
   try {
@@ -662,19 +636,21 @@ els.btnSignin.addEventListener("click", async () => {
 document.addEventListener("keydown", (event) => {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
 
-  // Home: Enter/Space = Review, L = Listen, I = Import, M = toggle mode.
+  // Home: Enter/Space = the solid action (Cards by default, Listen when
+  // nothing is due), C = Choices, L = Listen, I = Import.
   if (currentState === "state-home") {
     if (event.key === "Enter" || event.key === " ") {
       // A focused button/link activates natively — don't double-fire.
       if (document.activeElement?.closest("button, a")) return;
       event.preventDefault(); // don't scroll
-      startReview();
+      if (buildQueue(words, localToday()).length === 0) openListen();
+      else startSession("cards");
       return;
     }
     const key = event.key.toLowerCase();
-    if (key === "l") openListen();
+    if (key === "c") startChoices();
+    else if (key === "l") openListen();
     else if (key === "i") openImport();
-    else if (key === "m") toggleMode();
     return;
   }
 

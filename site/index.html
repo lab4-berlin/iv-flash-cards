@@ -41,20 +41,17 @@
     <section id="state-home" class="message" hidden>
       <h3>IV Flash Cards</h3>
       <p id="home-status"></p>
+      <!-- Four equal direct-action buttons (issue #69): each starts its
+           mode immediately; the solid one moves to Listen when nothing is
+           due. Choices disables (with caption) under 4 distinct words. -->
       <div class="menu">
-        <button id="btn-review" class="btn solid" type="button">Review</button>
-        <!-- Review-mode picker (issue #31): persisted, Choices disabled until the mode lands -->
-        <div class="mode">
-          <div id="mode-picker" class="segmented" role="radiogroup" aria-label="Review mode">
-            <button id="mode-cards" class="seg-cell" type="button" role="radio">Cards</button>
-            <button id="mode-choices" class="seg-cell" type="button" role="radio">Choices</button>
-          </div>
-          <div id="mode-caption" class="seg-caption" hidden></div>
-        </div>
+        <button id="btn-cards" class="btn solid" type="button">Cards</button>
+        <button id="btn-choices" class="btn outline" type="button">Choices</button>
+        <div id="choices-caption" class="btn-cap" hidden>Choices needs at least 4 words</div>
         <button id="btn-listen" class="btn outline" type="button">Listen</button>
         <button id="btn-import" class="btn outline" type="button">Import words</button>
       </div>
-      <div class="home-keys">enter &middot; L &middot; I &middot; M</div>
+      <div class="home-keys">enter &middot; C &middot; L &middot; I</div>
     </section>
 
     <!-- Listen screen (issue #41, design/listening-mode.md): hands-free
