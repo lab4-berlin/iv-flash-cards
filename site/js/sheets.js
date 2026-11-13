@@ -1,9 +1,9 @@
 // Google Sheets API v4 adapter (ADR-0001, ADR-0003, ADR-0005).
 // Reads `Words!A2:P`. Writes are scoped per concern: grading writes only
 // the app-owned stats block `G:L` of one row; audio-ref writes only `M:P`
-// of one row; the phrase-translation backfill (#28) writes the single cell
-// `D{row}`; import appends whole `A:P` rows at the bottom. Grading never
-// writes user text columns. On a completely blank sheet, `ensureHeader`
+// of one row; the enrichment backfill (#28/#72) writes the single cells
+// `C{row}` and `D{row}`; import appends whole `A:P` rows at the bottom.
+// Grading never writes user text columns. On a completely blank sheet, `ensureHeader`
 // writes the header row to `A1:P1` once at startup (issue #56).
 
 import { SPREADSHEET_ID } from "./config.js";
@@ -141,6 +141,23 @@ export async function writeAudioRefs(token, word) {
   const range = encodeURIComponent(`Words!M${row}:P${row}`);
   await request(token, "PUT", `${range}?valueInputOption=RAW`, {
     values: [wordToAudioRefsRow(word)],
+  });
+}
+
+/**
+ * Write one word's example phrase to the single cell `C{row}` — used by
+ * the enrichment backfill (#28/#72) for rows added by hand without a
+ * phrase. Sits in the user-text zone; the backfill only ever calls this
+ * when the cell is empty, so user text is never overwritten.
+ * @param {string} token OAuth access token
+ * @param {object} word a Word object with a valid `rowIndex`
+ * @throws {SheetsAuthError} on 401, {SheetsError} on other API failures
+ */
+export async function writePhrase(token, word) {
+  const row = word.rowIndex;
+  const range = encodeURIComponent(`Words!C${row}`);
+  await request(token, "PUT", `${range}?valueInputOption=RAW`, {
+    values: [[word.example ?? ""]],
   });
 }
 

@@ -6,6 +6,9 @@ import {
   buildPrompt,
   parseEnrichment,
   enrichWord,
+  buildTranslatePrompt,
+  parseTranslation,
+  translatePhrase,
   GeminiError,
   RateLimitError,
   EnrichmentParseError,
@@ -189,5 +192,122 @@ describe("enrichWord", () => {
       ),
     );
     await assert.rejects(enrichWord("k", "perro", []), EnrichmentParseError);
+  });
+});
+
+// --------------------------------------------- phrase translation (#28/#72)
+
+describe("buildTranslatePrompt", () => {
+  test("names the phrase and asks only for phrase_en", () => {
+    const prompt = buildTranslatePrompt("La mesa es grande.");
+    assert.match(prompt, /"La mesa es grande\."/);
+    assert.match(prompt, /"phrase_en"/);
+    // The backfill must not invent a new phrase for an existing row.
+    assert.doesNotMatch(prompt, /"phrase_es"/);
+    assert.doesNotMatch(prompt, /"translation"/);
+  });
+});
+
+describe("parseTranslation", () => {
+  test("returns the trimmed phrase_en", () => {
+    assert.equal(
+      parseTranslation(JSON.stringify({ phrase_en: " The table is big. " })),
+      "The table is big.",
+    );
+  });
+
+  test("rejects malformed JSON, non-objects, and missing/empty phrase_en", () => {
+    for (const bad of [
+      "not json",
+      JSON.stringify([1]),
+      JSON.stringify(null),
+      JSON.stringify({}),
+      JSON.stringify({ phrase_en: "" }),
+      JSON.stringify({ phrase_en: 42 }),
+    ]) {
+      assert.throws(() => parseTranslation(bad), EnrichmentParseError);
+    }
+  });
+});
+
+describe("translatePhrase", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  function stubFetch(response) {
+    const calls = [];
+    globalThis.fetch = async (url, options) => {
+      calls.push({ url, options });
+      return response;
+    };
+    return calls;
+  }
+
+  test("posts the translate prompt with the key header and JSON config", async () => {
+    const calls = stubFetch(
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: JSON.stringify({ phrase_en: "The table is big." }) }],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await translatePhrase("test-key", "La mesa es grande.");
+
+    assert.equal(result, "The table is big.");
+    assert.equal(calls.length, 1);
+    const { url, options } = calls[0];
+    assert.match(url, new RegExp(`${MODEL}:generateContent$`));
+    assert.equal(options.headers["x-goog-api-key"], "test-key");
+    const body = JSON.parse(options.body);
+    assert.equal(
+      body.contents[0].parts[0].text,
+      buildTranslatePrompt("La mesa es grande."),
+    );
+    assert.deepEqual(body.generationConfig.responseSchema.required, ["phrase_en"]);
+    assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingBudget: 0 });
+  });
+
+  test("429 surfaces as RateLimitError (the backfill backs off on these)", async () => {
+    stubFetch(new Response("quota", { status: 429 }));
+    await assert.rejects(
+      translatePhrase("k", "La mesa es grande."),
+      (err) => err instanceof RateLimitError && err.status === 429,
+    );
+  });
+
+  test("other HTTP failures surface as GeminiError with the status", async () => {
+    stubFetch(new Response("boom", { status: 500 }));
+    await assert.rejects(
+      translatePhrase("k", "La mesa es grande."),
+      (err) =>
+        err instanceof GeminiError &&
+        !(err instanceof RateLimitError) &&
+        err.status === 500,
+    );
+  });
+
+  test("a wrong-shape response throws EnrichmentParseError", async () => {
+    stubFetch(
+      new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: "not json" }] } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    await assert.rejects(
+      translatePhrase("k", "La mesa es grande."),
+      EnrichmentParseError,
+    );
   });
 });

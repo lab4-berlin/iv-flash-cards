@@ -14,6 +14,11 @@
 //        - writeAudioRefs(word): write the word's M:P audio-ref cells
 //        - synthesize(text, language, voice): TTS, resolves with a Blob
 //        - uploadClip(filename, blob): Drive upload, resolves with file ID
+//        - writePhrase(word): write the word's C phrase cell (backfill)
+//        - writePhraseTranslation(word): write the word's D cell (backfill)
+//        - translatePhrase(phrase): Gemini translation of one existing
+//          phrase (backfill rows with C filled but D empty), e.g.
+//          (p) => gemini.translatePhrase(key, p)
 //
 // Words are processed sequentially — free-tier rate limits, not throughput,
 // are the constraint (ADR-0004). Within one word, the 4 TTS calls run in
@@ -64,9 +69,11 @@ export const STATES = [
 // Legal state transitions: pending → enriching → appending → audio(0..4)
 // → done, with failed(phase) reachable from any active phase and
 // skipped-duplicate decided up front. audio → audio bumps clipsDone.
+// The backfill run (#72) works on rows that already exist, so it skips
+// appending: enriching → audio is legal too.
 const TRANSITIONS = {
   pending: ["enriching", "skipped-duplicate"],
-  enriching: ["appending", "failed"],
+  enriching: ["appending", "audio", "failed"],
   appending: ["audio", "failed"],
   audio: ["audio", "done", "failed"],
   "skipped-duplicate": [],
@@ -173,6 +180,48 @@ const CLIPS = [
   { kind: "phrase_en", field: "audioPhraseEn", textField: "phraseTranslation", language: "en" },
 ];
 
+/**
+ * The backfill fill decision for one row (#72, pure): what's missing →
+ * what's generated. Never plans a write to a non-empty cell.
+ *
+ * - `phrase`: C is empty → a phrase is generated (Gemini enrichment).
+ * - `phraseTranslation`: D is empty → filled from the enrichment when the
+ *   phrase is generated too, otherwise by translating the existing phrase.
+ * - `clips`: the clip kinds whose M:P cell is empty *and* whose source
+ *   text exists or is itself being filled this run. A clip whose source
+ *   text is missing and not fillable (e.g. `word_en` on a row without a
+ *   translation — B is user-owned, never backfilled) is not planned.
+ *
+ * An empty audio cell means "missing — please generate" (ADR-0005), so a
+ * cell the user cleared to request regeneration is simply planned again.
+ *
+ * @param {object} word a Word (model.js)
+ * @returns {{phrase: boolean, phraseTranslation: boolean, clips: string[]}}
+ */
+export function backfillNeeds(word) {
+  const phrase = !word.example;
+  const phraseTranslation = !word.phraseTranslation;
+  const willHaveText = (textField) =>
+    Boolean(word[textField]) ||
+    (textField === "example" && phrase) ||
+    (textField === "phraseTranslation" && phraseTranslation);
+  const clips = CLIPS.filter(
+    ({ field, textField }) => !word[field] && willHaveText(textField),
+  ).map(({ kind }) => kind);
+  return { phrase, phraseTranslation, clips };
+}
+
+/**
+ * Whether a row is incomplete, i.e. the backfill would touch it (#72).
+ * Drives the count on the step-1 entry button and the run's target list.
+ * @param {object} word a Word (model.js)
+ * @returns {boolean}
+ */
+export function needsBackfill(word) {
+  const needs = backfillNeeds(word);
+  return needs.phrase || needs.phraseTranslation || needs.clips.length > 0;
+}
+
 // ---------------------------------------------------------------- glue
 
 const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -187,10 +236,13 @@ const isoToday = () => new Date().toISOString().slice(0, 10);
  * @param {(word) => Promise<void>} deps.writeAudioRefs
  * @param {(text, language, voice) => Promise<Blob>} deps.synthesize
  * @param {(filename, blob) => Promise<string>} deps.uploadClip
+ * @param {(word) => Promise<void>} [deps.writePhrase] backfill only
+ * @param {(word) => Promise<void>} [deps.writePhraseTranslation] backfill only
+ * @param {(phrase) => Promise<string>} [deps.translatePhrase] backfill only
  * @param {() => string} [deps.pickVoice] defaults to voices.js
  * @param {(ms) => Promise<void>} [deps.sleep] injectable clock for tests
  * @param {() => string} [deps.today] YYYY-MM-DD for date_added
- * @returns {{run, generateMissingClips}}
+ * @returns {{run, backfill, generateMissingClips}}
  */
 export function createImporter({
   enrich,
@@ -198,6 +250,9 @@ export function createImporter({
   writeAudioRefs,
   synthesize,
   uploadClip,
+  writePhrase,
+  writePhraseTranslation,
+  translatePhrase,
   pickVoice = defaultPickVoice,
   sleep = realSleep,
   today = isoToday,
@@ -402,5 +457,112 @@ export function createImporter({
     return { items, summary: summarize(items) };
   }
 
-  return { run, generateMissingClips };
+  /**
+   * Run one backfill batch over existing rows (#72, part 2 of #28):
+   * complete rows are left out entirely; each incomplete row gets, where
+   * missing, a generated phrase (→ C), a phrase translation (→ D), and
+   * whatever clips are absent (→ M:P via generateMissingClips). Non-empty
+   * cells are never written (see backfillNeeds). Same per-word failure
+   * isolation, backoff, progress snapshots and cancel semantics as `run`.
+   *
+   * @param {object[]} words Words (model.js) with valid `rowIndex`es —
+   *   typically the freshly reloaded sheet
+   * @param {(items: object[]) => void} [onProgress] fresh items snapshot
+   *   after every state change, for the UI
+   * @param {() => boolean} [shouldStop] checked before each word; the
+   *   current word is never cut mid-flight
+   * @returns {Promise<{items: object[], summary: object}>} summary.imported
+   *   counts the rows fully enriched this run
+   */
+  async function backfill(words, onProgress, shouldStop) {
+    const targets = words.filter(needsBackfill);
+    const items = targets.map((w) => ({
+      ...createItem(w.word),
+      rowIndex: w.rowIndex,
+    }));
+    // The enrichment prompt may lean on the whole vocabulary, like import.
+    const vocabulary = words.map((w) => w.word);
+    const update = (index, next) => {
+      items[index] = next;
+      onProgress?.([...items]);
+    };
+    onProgress?.([...items]);
+
+    for (let i = 0; i < items.length; i++) {
+      if (shouldStop?.()) break;
+      const fail = (error) => {
+        console.error(
+          `[backfill] "${items[i].word}" failed in phase "${items[i].state}":`,
+          error,
+        );
+        update(
+          i,
+          transition(items[i], "failed", {
+            error,
+            retryable: isRateLimit(error),
+          }),
+        );
+      };
+
+      let word = { ...targets[i] };
+      const needs = backfillNeeds(word);
+
+      // Phase 1: text fills. A generated phrase brings its own translation
+      // from the same enrichment call; a row that already has a phrase but
+      // no D gets just that phrase translated. Cells already filled are
+      // never written (needs.* is false for them).
+      update(i, transition(items[i], "enriching"));
+      try {
+        if (needs.phrase) {
+          const enrichment = await withBackoff(
+            () => enrich(word.word, vocabulary),
+            sleep,
+          );
+          word = { ...word, example: enrichment.phraseEs };
+          await writePhrase(word);
+          if (needs.phraseTranslation) {
+            word = { ...word, phraseTranslation: enrichment.phraseEn };
+            await writePhraseTranslation(word);
+          }
+        } else if (needs.phraseTranslation) {
+          const phraseEn = await withBackoff(
+            () => translatePhrase(word.example),
+            sleep,
+          );
+          word = { ...word, phraseTranslation: phraseEn };
+          await writePhraseTranslation(word);
+        }
+      } catch (error) {
+        fail(error);
+        continue;
+      }
+
+      // Phase 2: whatever clips are still missing (cells left empty by a
+      // partial import, hand-added rows, or cleared for regeneration).
+      update(i, transition(items[i], "audio", { rowIndex: word.rowIndex }));
+      try {
+        const result = await generateMissingClips(word, () =>
+          update(
+            i,
+            transition(items[i], "audio", {
+              clipsDone: items[i].clipsDone + 1,
+            }),
+          ),
+        );
+        if (result.failures.length > 0) {
+          // Cells of failed clips stay empty — the next backfill retries.
+          fail(result.failures[0].error);
+          continue;
+        }
+      } catch (error) {
+        fail(error);
+        continue;
+      }
+      update(i, transition(items[i], "done"));
+    }
+
+    return { items, summary: summarize(items) };
+  }
+
+  return { run, backfill, generateMissingClips };
 }

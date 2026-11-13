@@ -40,6 +40,16 @@ export function generateLabel(count) {
   return `Generate ${countCaption(count)}`;
 }
 
+/**
+ * The muted caption under the step-1 backfill button (#72): the count of
+ * incomplete rows — "3 incomplete rows". The button (and caption) are
+ * hidden at 0, so this never renders a zero.
+ * @param {number} count incomplete rows (importer.js needsBackfill)
+ */
+export function backfillCaption(count) {
+  return `${count} incomplete ${count === 1 ? "row" : "rows"}`;
+}
+
 /** Short muted reason for a failed row, from the phase the word broke in. */
 export function failureCaption(item) {
   if (item?.error?.name === "RateLimitError") return "rate limited";

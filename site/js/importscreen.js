@@ -15,6 +15,7 @@ import {
   uniqueWords,
   countCaption,
   generateLabel,
+  backfillCaption,
   failureCaption,
   rowView,
   progressView,
@@ -24,6 +25,7 @@ import {
   partitionFailed,
   isGeneratorUnreachable,
 } from "./importflow.js";
+import { needsBackfill } from "./importer.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -42,8 +44,11 @@ const KEY_CAPTIONS = {
  * Wire up the import screen once.
  *
  * @param {object} deps
- * @param {{run, generateMissingClips}} deps.importer an importer.js instance
+ * @param {{run, backfill, generateMissingClips}} deps.importer an
+ *   importer.js instance
  * @param {() => string[]} deps.getVocabulary current words column
+ * @param {() => object[]} deps.getWords current Words (model.js) — drives
+ *   the step-1 backfill button's incomplete-row count (#72)
  * @param {() => Promise<object[]>} deps.reloadWords refetch the sheet (and
  *   update the app's word list); resolves with the fresh Words
  * @param {(fileId: string) => Promise<Blob>} deps.fetchClip Drive download
@@ -69,6 +74,8 @@ export function initImportScreen(deps) {
     file: $("imp-file"),
     count: $("imp-count"),
     generate: $("imp-generate"),
+    backfill: $("imp-backfill"),
+    backfillCap: $("imp-backfill-cap"),
     keyChange: $("imp-key-change"),
     progress: $("imp-progress"),
     progressCount: $("imp-progress-count"),
@@ -94,6 +101,7 @@ export function initImportScreen(deps) {
   let cancelled = false; // Cancel/✕ pressed during a run
   let unreachable = false; // whole-batch failure detected this run
   let lastRunText = ""; // input of the last run, for the error-state Retry
+  let mode = "import"; // "import" | "backfill" — steers Retry (#72)
   // The cumulative session report: Word objects added (for translations,
   // phrases and clips), skipped word strings, and failed batch items.
   let report = { added: [], skipped: [], failed: [] };
@@ -152,8 +160,18 @@ export function initImportScreen(deps) {
     els.generate.classList.toggle("solid", count > 0);
   }
 
+  /** The backfill entry (#72): outline button + incomplete-row caption,
+   *  both hidden when every row is complete. */
+  function refreshBackfill() {
+    const count = deps.getWords().filter(needsBackfill).length;
+    els.backfill.hidden = count === 0;
+    els.backfillCap.hidden = count === 0;
+    els.backfillCap.textContent = backfillCaption(count);
+  }
+
   function showInput() {
     refreshCount();
+    refreshBackfill();
     showSub("input");
     els.text.focus();
   }
@@ -231,6 +249,7 @@ export function initImportScreen(deps) {
   // ----------------------------------------------------------- run a batch
 
   async function startBatch(text) {
+    mode = "import";
     lastRunText = text;
     report = { added: [], skipped: [], failed: [] };
     deps.setBanner(null);
@@ -281,6 +300,97 @@ export function initImportScreen(deps) {
       }
       // cancelled runs leave `pending` items — dropped, per the design
     }
+  }
+
+  // ------------------------------------------------------- backfill (#72)
+
+  /** Run one backfill over the given rows; shared by start and retry.
+   *  Reuses step 2 (progress) and the error state unchanged. Resolves with
+   *  the run's items, or null when the generator was unreachable. */
+  async function runBackfill(words) {
+    const targets = words.filter(needsBackfill);
+    showProgress(
+      targets.map((w) => rowView({ word: w.word, state: "pending" })),
+    );
+    const { items } = await deps.importer.backfill(
+      words,
+      (snapshot) => {
+        if (!unreachable && isGeneratorUnreachable(snapshot)) {
+          unreachable = true;
+          cancelled = true; // stop after the current word
+        }
+        renderProgress(snapshot.map(rowView), progressView(snapshot));
+      },
+      () => cancelled,
+    );
+    running = false;
+
+    if (unreachable) {
+      showSub("error");
+      return null;
+    }
+    return items;
+  }
+
+  async function startBackfill() {
+    mode = "backfill";
+    report = { added: [], skipped: [], failed: [] };
+    deps.setBanner(null);
+    bannerShown = false;
+    running = true;
+    // Work from a fresh read so hand edits since app load (new rows,
+    // cleared audio cells, ADR-0005) are picked up; on a failed reload the
+    // in-memory words still give a correct, if possibly stale, run.
+    let words = deps.getWords();
+    try {
+      words = await deps.reloadWords();
+    } catch {
+      // fall through with the in-memory words
+    }
+    const items = await runBackfill(words);
+    if (!items) return;
+    await collectOutcomes(items);
+    showResults();
+  }
+
+  /** Step-3 Retry in backfill mode: backfill the failed rows again — the
+   *  run only ever fills what is still missing, so this is idempotent. */
+  async function retryBackfill() {
+    const toRetry = report.failed;
+    report.failed = [];
+    deps.setBanner(null);
+    bannerShown = false;
+    running = true;
+
+    let byRow = new Map();
+    try {
+      const words = await deps.reloadWords();
+      byRow = new Map(words.map((w) => [w.rowIndex, w]));
+    } catch {
+      // Lookups below miss; those rows simply stay failed, retryable.
+    }
+    const targets = [];
+    for (const item of toRetry) {
+      const word = byRow.get(item.rowIndex);
+      if (word) targets.push(word);
+      else report.failed.push(item); // row lookup didn't resolve
+    }
+
+    const items = await runBackfill(targets);
+    if (!items) return;
+    // Rows a cancel never reached (still incomplete) were failed before —
+    // they stay so; rows completed by hand since drop out silently.
+    const settled = new Set(
+      items.filter((i) => i.state !== "pending").map((i) => i.rowIndex),
+    );
+    for (const item of toRetry) {
+      const word = byRow.get(item.rowIndex);
+      if (word && !settled.has(item.rowIndex) && needsBackfill(word)) {
+        report.failed.push(item);
+      }
+    }
+    await collectOutcomes(items);
+    showResults();
   }
 
   // ---------------------------------------------------------- step 3: report
@@ -530,15 +640,20 @@ export function initImportScreen(deps) {
     if (words.length === 0) return;
     void startBatch(words.join("\n"));
   });
+  els.backfill.addEventListener("click", () => void startBackfill());
   els.keyChange.addEventListener("click", () => showKey());
 
   els.cancel.addEventListener("click", cancelRun);
 
-  els.retry.addEventListener("click", () => void retryFailed());
+  els.retry.addEventListener("click", () =>
+    void (mode === "backfill" ? retryBackfill() : retryFailed()),
+  );
   els.done.addEventListener("click", exit);
   els.sheet.href = deps.sheetUrl;
 
-  els.errorRetry.addEventListener("click", () => void startBatch(lastRunText));
+  els.errorRetry.addEventListener("click", () =>
+    void (mode === "backfill" ? startBackfill() : startBatch(lastRunText)),
+  );
   els.errorBack.addEventListener("click", () => showInput());
 
   // ------------------------------------------------------------------- open

@@ -123,6 +123,42 @@ export function parseEnrichment(responseText) {
   };
 }
 
+async function generate(key, prompt, schema, label) {
+  const url = `${API_BASE}/${MODEL}:generateContent`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": key,
+    },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+        // No thinking for these simple extractions — ~2.5 s faster per word
+        // with identical output quality (measured in issue #59).
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    }),
+  });
+  if (response.status === 429) {
+    throw new RateLimitError(`Gemini API: rate limited (${label})`);
+  }
+  if (!response.ok) {
+    throw new GeminiError(
+      `Gemini API: ${response.status} (${label})`,
+      response.status,
+    );
+  }
+  const data = await response.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (typeof text !== "string") {
+    throw invalid("response contains no candidate text");
+  }
+  return text;
+}
+
 /**
  * Enrich one word via Gemini `generateContent` with structured JSON output.
  * @param {string} key user-supplied Gemini API key (ADR-0004)
@@ -133,37 +169,81 @@ export function parseEnrichment(responseText) {
  *   {EnrichmentParseError} when the model output has the wrong shape
  */
 export async function enrichWord(key, word, vocabulary) {
-  const url = `${API_BASE}/${MODEL}:generateContent`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": key,
-    },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: buildPrompt(word, vocabulary) }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: RESPONSE_SCHEMA,
-        // No thinking for this simple extraction — ~2.5 s faster per word
-        // with identical output quality (measured in issue #59).
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    }),
-  });
-  if (response.status === 429) {
-    throw new RateLimitError(`Gemini API: rate limited (word "${word}")`);
-  }
-  if (!response.ok) {
-    throw new GeminiError(
-      `Gemini API: ${response.status} (word "${word}")`,
-      response.status,
-    );
-  }
-  const data = await response.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (typeof text !== "string") {
-    throw invalid("response contains no candidate text");
-  }
+  const text = await generate(
+    key,
+    buildPrompt(word, vocabulary),
+    RESPONSE_SCHEMA,
+    `word "${word}"`,
+  );
   return parseEnrichment(text);
+}
+
+// --------------------------------------------- phrase translation (#28/#72)
+
+// Wire format for translating one existing phrase (backfill: a hand-added
+// row has a phrase in C but no translation in D).
+const TRANSLATE_SCHEMA = {
+  type: "OBJECT",
+  properties: { phrase_en: { type: "STRING" } },
+  required: ["phrase_en"],
+};
+
+/**
+ * Build the prompt translating one existing Spanish phrase (pure).
+ * Unlike {@link buildPrompt} this must not invent a new phrase — the user
+ * wrote this one, the backfill only fills in its English translation.
+ * @param {string} phrase the Spanish example phrase from the sheet
+ * @returns {string} prompt text
+ */
+export function buildTranslatePrompt(phrase) {
+  return [
+    "You are helping a learner of Spanish build vocabulary flashcards.",
+    `Translate this Spanish phrase into natural, simple English: "${phrase}".`,
+    "",
+    'Respond with a single JSON object with exactly the key "phrase_en",' +
+      " a string.",
+  ].join("\n");
+}
+
+/**
+ * Strictly parse and validate a translate-phrase response (pure).
+ * @param {string} responseText expected: JSON object with a non-empty
+ *   string `phrase_en`
+ * @returns {string} the English translation, trimmed
+ * @throws {EnrichmentParseError} on malformed JSON or a wrong shape
+ */
+export function parseTranslation(responseText) {
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw invalid("response is not valid JSON");
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw invalid("response is not a JSON object");
+  }
+  const value = data.phrase_en;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw invalid('"phrase_en" is missing or not a non-empty string');
+  }
+  return value.trim();
+}
+
+/**
+ * Translate one existing Spanish phrase via Gemini — the backfill (#72)
+ * uses this for rows that already have a phrase (C) but no translation (D).
+ * @param {string} key user-supplied Gemini API key (ADR-0004)
+ * @param {string} phrase the Spanish example phrase
+ * @returns {Promise<string>} the English translation
+ * @throws {RateLimitError} on 429, {GeminiError} on other API failures,
+ *   {EnrichmentParseError} when the model output has the wrong shape
+ */
+export async function translatePhrase(key, phrase) {
+  const text = await generate(
+    key,
+    buildTranslatePrompt(phrase),
+    TRANSLATE_SCHEMA,
+    `phrase "${phrase}"`,
+  );
+  return parseTranslation(text);
 }

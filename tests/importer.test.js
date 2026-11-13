@@ -10,6 +10,8 @@ import {
   summarize,
   withBackoff,
   BACKOFF_DELAYS_MS,
+  backfillNeeds,
+  needsBackfill,
   createImporter,
 } from "../site/js/importer.js";
 
@@ -184,7 +186,17 @@ function enrichmentFor(word) {
 
 /** Importer with happy-path stub deps; every call is recorded. */
 function stubImporter(overrides = {}) {
-  const log = { enriched: [], appended: [], synthesized: [], uploaded: [], audioRefWrites: [], sleeps: [] };
+  const log = {
+    enriched: [],
+    appended: [],
+    synthesized: [],
+    uploaded: [],
+    audioRefWrites: [],
+    phraseWrites: [],
+    phraseTranslationWrites: [],
+    translated: [],
+    sleeps: [],
+  };
   let nextRow = 10;
   const importer = createImporter({
     enrich: async (word, vocabulary) => {
@@ -205,6 +217,19 @@ function stubImporter(overrides = {}) {
     uploadClip: async (filename, blob) => {
       log.uploaded.push({ filename, blob });
       return `drive-${log.uploaded.length}`;
+    },
+    writePhrase: async (word) => {
+      log.phraseWrites.push({ rowIndex: word.rowIndex, example: word.example });
+    },
+    writePhraseTranslation: async (word) => {
+      log.phraseTranslationWrites.push({
+        rowIndex: word.rowIndex,
+        phraseTranslation: word.phraseTranslation,
+      });
+    },
+    translatePhrase: async (phrase) => {
+      log.translated.push(phrase);
+      return `EN: ${phrase}`;
     },
     pickVoice: () => "Puck",
     sleep: async (ms) => log.sleeps.push(ms),
@@ -603,5 +628,300 @@ describe("generateMissingClips", () => {
     });
     assert.deepEqual(failures, []);
     assert.deepEqual(log.sleeps, [1000]);
+  });
+});
+
+// ------------------------------------------------------------ backfill (#72)
+
+/** A sheet Word with sensible complete-row defaults. */
+function makeWord(overrides = {}) {
+  return {
+    word: "mesa",
+    translation: "table",
+    example: "La mesa es grande.",
+    phraseTranslation: "The table is big.",
+    audioWordEs: "id1",
+    audioPhraseEs: "id2",
+    audioWordEn: "id3",
+    audioPhraseEn: "id4",
+    rowIndex: 2,
+    ...overrides,
+  };
+}
+
+describe("backfillNeeds (fill decisions)", () => {
+  test("a complete row needs nothing", () => {
+    assert.deepEqual(backfillNeeds(makeWord()), {
+      phrase: false,
+      phraseTranslation: false,
+      clips: [],
+    });
+    assert.equal(needsBackfill(makeWord()), false);
+  });
+
+  test("a bare hand-added row needs phrase, translation and all 4 clips", () => {
+    const word = makeWord({
+      example: null,
+      phraseTranslation: null,
+      audioWordEs: null,
+      audioPhraseEs: null,
+      audioWordEn: null,
+      audioPhraseEn: null,
+    });
+    assert.deepEqual(backfillNeeds(word), {
+      phrase: true,
+      phraseTranslation: true,
+      clips: ["word_es", "phrase_es", "word_en", "phrase_en"],
+    });
+    assert.equal(needsBackfill(word), true);
+  });
+
+  test("an existing phrase is kept; only its translation is planned", () => {
+    const word = makeWord({ phraseTranslation: null, audioPhraseEn: null });
+    assert.deepEqual(backfillNeeds(word), {
+      phrase: false,
+      phraseTranslation: true,
+      clips: ["phrase_en"],
+    });
+  });
+
+  test("an existing phrase translation is kept when only the phrase is missing", () => {
+    const word = makeWord({ example: null, audioPhraseEs: null });
+    assert.deepEqual(backfillNeeds(word), {
+      phrase: true,
+      phraseTranslation: false,
+      clips: ["phrase_es"],
+    });
+  });
+
+  test("a cleared audio cell is planned again (regeneration, ADR-0005)", () => {
+    const word = makeWord({ audioPhraseEs: null });
+    assert.deepEqual(backfillNeeds(word), {
+      phrase: false,
+      phraseTranslation: false,
+      clips: ["phrase_es"],
+    });
+    assert.equal(needsBackfill(word), true);
+  });
+
+  test("a clip without source text is not planned (B is never backfilled)", () => {
+    // No translation → no word_en clip; the phrase clips are still planned
+    // because their texts exist or are generated this run.
+    const word = makeWord({ translation: null, audioWordEn: null });
+    assert.deepEqual(backfillNeeds(word), {
+      phrase: false,
+      phraseTranslation: false,
+      clips: [],
+    });
+    assert.equal(needsBackfill(word), false);
+  });
+});
+
+describe("backfill (pipeline glue)", () => {
+  test("complete rows are left out; no dependency is touched for them", async () => {
+    const { importer, log } = stubImporter();
+    const { items, summary } = await importer.backfill([makeWord()]);
+    assert.deepEqual(items, []);
+    assert.deepEqual(summary, { total: 0, imported: 0, skipped: 0, failed: 0, inProgress: 0 });
+    assert.equal(log.enriched.length, 0);
+    assert.equal(log.synthesized.length, 0);
+    assert.equal(log.phraseWrites.length, 0);
+  });
+
+  test("bare hand-added row: enrich → write C and D → 4 clips → write M:P → done", async () => {
+    const { importer, log } = stubImporter();
+    const bare = makeWord({
+      word: "silla",
+      translation: "chair",
+      example: null,
+      phraseTranslation: null,
+      audioWordEs: null,
+      audioPhraseEs: null,
+      audioWordEn: null,
+      audioPhraseEn: null,
+      rowIndex: 5,
+    });
+    const { items, summary } = await importer.backfill([bare, makeWord()]);
+
+    assert.equal(items.length, 1); // the complete row is not an item
+    assert.equal(items[0].state, "done");
+    assert.equal(items[0].rowIndex, 5);
+    assert.equal(items[0].clipsDone, 4);
+    assert.deepEqual(summary, { total: 1, imported: 1, skipped: 0, failed: 0, inProgress: 0 });
+
+    // The prompt saw the whole vocabulary, including complete rows.
+    assert.deepEqual(log.enriched, [{ word: "silla", vocabulary: ["silla", "mesa"] }]);
+    // Generated phrase → C, its translation → D (single-cell writes).
+    assert.deepEqual(log.phraseWrites, [{ rowIndex: 5, example: "Frase con silla." }]);
+    assert.deepEqual(log.phraseTranslationWrites, [
+      { rowIndex: 5, phraseTranslation: "Phrase with silla." },
+    ]);
+    assert.equal(log.translated.length, 0); // no separate translate call
+
+    // All 4 clips, from the filled texts, named by the existing row.
+    assert.deepEqual(
+      log.synthesized.map((s) => [s.text, s.language]),
+      [
+        ["silla", "es"],
+        ["Frase con silla.", "es"],
+        ["chair", "en"],
+        ["Phrase with silla.", "en"],
+      ],
+    );
+    assert.deepEqual(
+      log.uploaded.map((u) => u.filename),
+      [
+        "5-silla-word_es.wav",
+        "5-silla-phrase_es.wav",
+        "5-silla-word_en.wav",
+        "5-silla-phrase_en.wav",
+      ],
+    );
+    assert.equal(log.audioRefWrites.length, 1);
+    assert.equal(bare.example, null); // input Word not mutated
+  });
+
+  test("existing phrase, missing D: translates that phrase — never regenerates C", async () => {
+    const { importer, log } = stubImporter();
+    const word = makeWord({ phraseTranslation: null, audioPhraseEn: null });
+    const { items } = await importer.backfill([word]);
+
+    assert.equal(items[0].state, "done");
+    assert.equal(log.enriched.length, 0);
+    assert.equal(log.phraseWrites.length, 0); // C untouched
+    assert.deepEqual(log.translated, ["La mesa es grande."]);
+    assert.deepEqual(log.phraseTranslationWrites, [
+      { rowIndex: 2, phraseTranslation: "EN: La mesa es grande." },
+    ]);
+    // Only the missing phrase_en clip, from the fresh translation.
+    assert.deepEqual(
+      log.synthesized.map((s) => [s.text, s.language]),
+      [["EN: La mesa es grande.", "en"]],
+    );
+  });
+
+  test("missing phrase but existing D: generates C, keeps the user's D", async () => {
+    const { importer, log } = stubImporter();
+    const word = makeWord({ example: null, audioPhraseEs: null });
+    const { items } = await importer.backfill([word]);
+
+    assert.equal(items[0].state, "done");
+    assert.equal(log.enriched.length, 1);
+    assert.deepEqual(log.phraseWrites, [{ rowIndex: 2, example: "Frase con mesa." }]);
+    assert.equal(log.phraseTranslationWrites.length, 0); // D never overwritten
+    assert.equal(log.translated.length, 0);
+  });
+
+  test("clips-only row: no text calls, just the missing clips", async () => {
+    const { importer, log } = stubImporter();
+    const word = makeWord({ audioWordEs: null, audioPhraseEn: null });
+    const { items } = await importer.backfill([word]);
+
+    assert.equal(items[0].state, "done");
+    assert.equal(items[0].clipsDone, 2);
+    assert.equal(log.enriched.length, 0);
+    assert.equal(log.translated.length, 0);
+    assert.equal(log.phraseWrites.length, 0);
+    assert.equal(log.phraseTranslationWrites.length, 0);
+    assert.deepEqual(
+      log.synthesized.map((s) => [s.text, s.language]),
+      [
+        ["mesa", "es"],
+        ["The table is big.", "en"],
+      ],
+    );
+  });
+
+  test("one row failing never aborts the batch; the phase is recorded", async () => {
+    const boom = new Error("enrich boom");
+    const { importer, log } = stubImporter({
+      enrich: async () => {
+        throw boom;
+      },
+    });
+    const broken = makeWord({ word: "rota", example: null, rowIndex: 3 });
+    const clipsOnly = makeWord({ word: "casi", audioWordEs: null, rowIndex: 4 });
+    const { items, summary } = await importer.backfill([broken, clipsOnly]);
+
+    assert.equal(items[0].state, "failed");
+    assert.equal(items[0].phase, "enriching");
+    assert.equal(items[0].error, boom);
+    assert.equal(items[0].retryable, false);
+    assert.equal(items[0].rowIndex, 3); // retry can find the row again
+    assert.equal(items[1].state, "done");
+    assert.deepEqual(summary, { total: 2, imported: 1, skipped: 0, failed: 1, inProgress: 0 });
+    assert.equal(log.phraseWrites.length, 0); // nothing written for the failure
+  });
+
+  test("a clip failure marks failed(audio); successful IDs still written", async () => {
+    const { importer, log } = stubImporter({
+      synthesize: async (text, language) => {
+        if (language === "en") throw new Error("tts boom");
+        return { fake: "blob" };
+      },
+    });
+    const word = makeWord({
+      audioWordEs: null,
+      audioWordEn: null,
+      audioPhraseEn: null,
+    });
+    const { items } = await importer.backfill([word]);
+
+    assert.equal(items[0].state, "failed");
+    assert.equal(items[0].phase, "audio");
+    assert.equal(items[0].rowIndex, 2);
+    const written = log.audioRefWrites[0];
+    assert.equal(written.audioWordEs, "drive-1");
+    assert.equal(written.audioWordEn, null); // left empty for the next run
+  });
+
+  test("persistent rate limit on translate: full ladder, then failed-retryable", async () => {
+    const { importer, log } = stubImporter({
+      translatePhrase: async () => {
+        throw new FakeRateLimitError();
+      },
+    });
+    const word = makeWord({ phraseTranslation: null, audioPhraseEn: null });
+    const { items } = await importer.backfill([word]);
+
+    assert.equal(items[0].state, "failed");
+    assert.equal(items[0].phase, "enriching");
+    assert.equal(items[0].retryable, true);
+    assert.deepEqual(log.sleeps, [1000, 2000, 4000, 8000]);
+    assert.equal(log.phraseTranslationWrites.length, 0);
+  });
+
+  test("shouldStop cancels between rows: current row finishes, rest stay pending", async () => {
+    const { importer, log } = stubImporter();
+    let stop = false;
+    const rows = [
+      makeWord({ word: "uno", audioWordEs: null, rowIndex: 2 }),
+      makeWord({ word: "dos", audioWordEs: null, rowIndex: 3 }),
+    ];
+    const { items, summary } = await importer.backfill(
+      rows,
+      (snapshot) => {
+        if (snapshot[0].state === "audio") stop = true;
+      },
+      () => stop,
+    );
+    assert.equal(items[0].state, "done");
+    assert.equal(items[1].state, "pending");
+    assert.equal(summary.inProgress, 1);
+    assert.equal(log.synthesized.length, 1); // never touched the second row
+  });
+
+  test("onProgress sees every state change with fresh snapshots", async () => {
+    const { importer } = stubImporter();
+    const seen = [];
+    const word = makeWord({ phraseTranslation: null, audioPhraseEn: null });
+    await importer.backfill([word], (items) => seen.push(items[0].state));
+    assert.deepEqual(seen, [
+      "pending",
+      "enriching",
+      "audio", // entering phase 2
+      "audio", // the one missing clip
+      "done",
+    ]);
   });
 });
