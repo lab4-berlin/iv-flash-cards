@@ -5,6 +5,7 @@ import {
   uniqueWords,
   countCaption,
   generateLabel,
+  backfillCaption,
   failureCaption,
   rowView,
   progressView,
@@ -45,6 +46,11 @@ describe("step-1 captions", () => {
     assert.equal(generateLabel(0), "Generate");
     assert.equal(generateLabel(1), "Generate 1 word");
     assert.equal(generateLabel(6), "Generate 6 words");
+  });
+
+  test("backfill caption counts incomplete rows, pluralized (#72)", () => {
+    assert.equal(backfillCaption(1), "1 incomplete row");
+    assert.equal(backfillCaption(3), "3 incomplete rows");
   });
 });
 

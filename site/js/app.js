@@ -16,6 +16,8 @@ import {
   writeStats,
   appendWords,
   writeAudioRefs,
+  writePhrase,
+  writePhraseTranslation,
 } from "./sheets.js";
 import {
   buildQueue,
@@ -28,7 +30,7 @@ import { createWriteQueue } from "./queue.js";
 import { choicesAvailable, buildQuestion } from "./distractors.js";
 import * as speech from "./speech.js";
 import * as apikey from "./apikey.js";
-import { enrichWord } from "./gemini.js";
+import { enrichWord, translatePhrase } from "./gemini.js";
 import { synthesize } from "./tts.js";
 import { ensureFolder, uploadClip, fetchClip } from "./drive.js";
 import { createImporter } from "./importer.js";
@@ -325,11 +327,17 @@ const importer = createImporter({
     const token = await freshToken();
     return uploadClip(token, await ensureFolder(token), filename, blob);
   },
+  // Backfill-only writers/translator (#72): single user-text cells C/D.
+  writePhrase: async (word) => writePhrase(await freshToken(), word),
+  writePhraseTranslation: async (word) =>
+    writePhraseTranslation(await freshToken(), word),
+  translatePhrase: (phrase) => translatePhrase(apikey.getKey(), phrase),
 });
 
 const importScreen = initImportScreen({
   importer,
   getVocabulary: () => words.map((w) => w.word),
+  getWords: () => words,
   reloadWords: async () => {
     words = await loadWords(await freshToken());
     return words;

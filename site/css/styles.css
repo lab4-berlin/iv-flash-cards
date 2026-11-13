@@ -581,6 +581,11 @@ button {
   letter-spacing: 0.02em;
 }
 
+/* Backfill entry caption (#72) — minimal placement pending Nick's pass. */
+.backfill-cap {
+  text-align: center;
+}
+
 /* Step 2: the standard progress component, inside the content column. */
 .imp-progress-bar .count {
   font-size: 12px;
