@@ -35,6 +35,7 @@ import { createImporter } from "./importer.js";
 import { initImportScreen } from "./importscreen.js";
 import { createPlayer } from "./player.js";
 import { initListenScreen } from "./listenscreen.js";
+import { createClipPlayer, cardClipIds } from "./clipplayer.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -184,6 +185,7 @@ function renderProgress() {
 function renderCard() {
   const word = session.queue[0];
   revealed = false;
+  prepareAudio(word);
   els.wordFront.textContent = word.word;
   els.wordBack.textContent = word.word;
   els.translation.textContent = word.translation;
@@ -209,6 +211,7 @@ function renderChoice() {
   // Availability is checked at session start and the vocabulary doesn't
   // change mid-session, so a question always exists here.
   question = { word, ...buildQuestion(words, word, Math.random) };
+  prepareAudio(word);
   els.wordFront.textContent = word.word;
   els.cardFront.hidden = false;
   els.cardBack.hidden = true;
@@ -543,21 +546,44 @@ async function start() {
 
 // --------------------------------------------------------------------- audio
 
-const speakerButtons = [
-  els.speakWordFront,
-  els.speakWordBack,
-  els.speakPhrase,
-  els.speakPhraseChoice,
+// Review speakers play stored natural clips through the clip player
+// (issue #71, part 1 of #28); Web Speech remains the fallback for rows
+// without clips and on fetch/play errors. Clips come from Drive through
+// the OAuth token, exactly like listen mode.
+const clipPlayer = createClipPlayer({
+  fetchClip: async (fileId) => fetchClip(await freshToken(), fileId),
+});
+
+// Which clip each speaker button plays: word speakers the Spanish word
+// clip, phrase speakers the Spanish phrase clip (#71).
+const speakerClips = [
+  [els.speakWordFront, "audioWordEs"],
+  [els.speakWordBack, "audioWordEs"],
+  [els.speakPhrase, "audioPhraseEs"],
+  [els.speakPhraseChoice, "audioPhraseEs"],
 ];
 
-/** Hairline/inert vs active speaker buttons (design-system disabled state). */
+/**
+ * Hairline/inert vs active speaker buttons (design-system disabled state).
+ * A speaker is active when its clip exists OR a Spanish voice does (#71);
+ * re-run on every card render (clips are per word) and on voiceschanged.
+ */
 function updateSpeakers() {
-  const available = speech.isAvailable();
-  for (const button of speakerButtons) {
-    button.classList.toggle("disabled", !available);
-    button.setAttribute("aria-disabled", String(!available));
+  const word = shownWord();
+  const voice = speech.isAvailable();
+  for (const [button, clipField] of speakerClips) {
+    const enabled = voice || Boolean(word?.[clipField]);
+    button.classList.toggle("disabled", !enabled);
+    button.setAttribute("aria-disabled", String(!enabled));
   }
-  if (available) els.voiceCaption.hidden = true;
+  if (voice) els.voiceCaption.hidden = true;
+}
+
+/** Per-render audio prep: speaker states follow the word's clips, and the
+ * card's clips are warmed so the first tap is instant (#28 acceptance). */
+function prepareAudio(word) {
+  updateSpeakers();
+  clipPlayer.preload(cardClipIds(word));
 }
 
 /**
@@ -571,13 +597,18 @@ function shownWord() {
 }
 
 /**
- * A speaker tap: eats the event (never reveals/advances the card), speaks
- * when a Spanish voice exists, otherwise shows the muted caption (#5).
+ * A speaker tap: eats the event (never reveals/advances the card), plays
+ * the stored clip when there is one, falls back to Web Speech on a missing
+ * clip or fetch/play error, and shows the muted caption (#5) only when
+ * both are absent (#71).
  */
-function onSpeakerTap(event, getText) {
+async function onSpeakerTap(event, getText, clipField) {
   event.stopPropagation();
   const word = shownWord();
   if (!word) return;
+  globalThis.speechSynthesis?.cancel(); // a clip must not play over speech
+  if (await clipPlayer.play(word[clipField])) return;
+  clipPlayer.stop(); // nor speech over a clip
   if (!speech.isAvailable()) {
     els.voiceCaption.hidden = false;
     return;
@@ -585,10 +616,18 @@ function onSpeakerTap(event, getText) {
   speech.speak(getText(word));
 }
 
-els.speakWordFront.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.word));
-els.speakWordBack.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.word));
-els.speakPhrase.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.example));
-els.speakPhraseChoice.addEventListener("click", (e) => onSpeakerTap(e, (w) => w.example));
+els.speakWordFront.addEventListener("click", (e) =>
+  onSpeakerTap(e, (w) => w.word, "audioWordEs"),
+);
+els.speakWordBack.addEventListener("click", (e) =>
+  onSpeakerTap(e, (w) => w.word, "audioWordEs"),
+);
+els.speakPhrase.addEventListener("click", (e) =>
+  onSpeakerTap(e, (w) => w.example, "audioPhraseEs"),
+);
+els.speakPhraseChoice.addEventListener("click", (e) =>
+  onSpeakerTap(e, (w) => w.example, "audioPhraseEs"),
+);
 
 speech.onVoicesChanged(updateSpeakers);
 updateSpeakers();
