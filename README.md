@@ -31,6 +31,19 @@ not directories, so plain `node --test tests/` does not work.)
 GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the
 tests on every push; on push to `main` it also deploys `site/` to GitHub Pages.
 
+## Installable app (PWA)
+
+The site ships a web app manifest ([site/manifest.webmanifest](site/manifest.webmanifest))
+and icons (`site/icons/`), so Chrome on Android offers a real "Install" and
+iOS Safari's "Add to Home Screen" gets a proper icon and title. `start_url`
+and `scope` are `/iv-flash-cards/` — the GitHub Pages subpath — so keep them
+in sync if the repo name or hosting path ever changes.
+
+There is deliberately **no service worker**: current Chrome installs from the
+manifest alone, and a caching worker would make deploys fight the cache. The
+installed app is a thin shell around the live page; every launch loads the
+latest deploy (issue #67).
+
 ## Configuration
 
 `site/js/config.js` holds the Google OAuth client ID and the spreadsheet ID.
