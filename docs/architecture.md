@@ -1,8 +1,9 @@
 # Architecture — IV Flash Cards
 
-A single-user vocabulary trainer. The entire system is **one static web page**
-plus **one Google Sheet**. There is no backend. See the ADRs in `docs/adr/`
-for the reasoning behind each decision.
+A vocabulary trainer for a small circle of invited users (OAuth test-user
+list). The entire system is **one static web page** plus, per user, **one
+Google Sheet in that user's own account**. There is no backend. See the ADRs
+in `docs/adr/` for the reasoning behind each decision.
 
 ```
 ┌─────────────────────────────┐        OAuth token (GIS)
@@ -23,7 +24,7 @@ for the reasoning behind each decision.
 | Hosting | GitHub Pages (deployed from `site/` via GitHub Actions) | Serve the static app |
 | Frontend | Vanilla JS ES modules, no framework, no build step | Review UI, flow |
 | Auth | Google Identity Services token client | OAuth access token for the Sheets scope (ADR-0001) |
-| Data store | Google Sheets API v4 | Single sheet, single worksheet `Words` |
+| Data store | Google Sheets API v4 | One sheet per user in their own account, discovered at startup (ADR-0008); worksheets `Words` + `Settings` |
 | Scheduler | Pure JS module | Interval-ladder spaced repetition (ADR-0002) |
 | Persistence | Pure JS module + localStorage | Immediate row writes, pending queue (ADR-0003) |
 | Audio (fallback) | Web Speech API (`speechSynthesis`) | Spanish TTS when no stored clip exists (#5, #28) |
@@ -38,10 +39,13 @@ site/                 # everything deployed to GitHub Pages
   index.html
   css/styles.css
   js/
-    config.js         # OAuth client ID, spreadsheet ID (non-secret)
+    config.js         # OAuth client ID only (non-secret; generated at deploy)
     auth.js           # GIS token client wrapper
-    sheets.js         # read all words / write one row (fetch + Sheets API)
-    model.js          # sheet row ⇄ Word object mapping
+    sheets.js         # read all words / write one row (fetch + Sheets API);
+                      #   spreadsheet ID injected at startup (ADR-0008)
+    settings.js       # Settings tab read/write (learning_language, …)
+    languages.js      # supported-language list: code, name, TTS code
+    model.js          # sheet row ⇄ Word object mapping + language filter
     scheduler.js      # pure: grading rules + session queue building
     queue.js          # pure core + localStorage-backed pending-write queue
     speech.js         # TTS wrapper with Spanish voice selection
@@ -68,7 +72,7 @@ audio refs are `M:P`:
 | C | `example` | user | optional example phrase |
 | D | `phrase_translation` | app (user may edit) | English translation of the example phrase |
 | E | `date_added` | user | `YYYY-MM-DD` |
-| F | `language` | user | `es` for MVP; model is multi-language ready |
+| F | `language` | user | language code (`es`, `fr`, …); rows not matching `Settings!learning_language` are ignored by all modes (#65); blank counts as the active language |
 | G | `times_shown` | app | integer |
 | H | `times_right` | app | integer |
 | I | `times_wrong` | app | integer |
@@ -91,11 +95,18 @@ Full spec with example rows: `docs/sheet-template.md`.
 
 ## Data flow
 
-1. **Startup:** `auth.js` obtains a token (silent if possible) →
-   `sheets.js` ensures the header row exists (written to a blank sheet,
-   #56) and reads `Words!A2:P` → `model.js` maps rows to Word objects
-   (keeping their row index) → `queue.js` flushes any pending writes from a
-   previous session → `scheduler.js` builds the due queue.
+1. **Startup:** `auth.js` obtains a token (silent if possible) → `drive.js`
+   discovers the user's vocabulary spreadsheet (`files.list` under
+   `drive.file`, oldest wins — ADR-0008; the ID is injected into `sheets.js`
+   and never persisted) → `sheets.js` ensures the `Words` header and
+   `Settings` tab exist (idempotent, #56/#62) → `settings.js` reads
+   `learning_language` → first run (no sheet, or no language yet) branches
+   into onboarding (create sheet → language picker → optional key offer,
+   `design/onboarding.md`); returning users see none of it → `sheets.js`
+   reads `Words!A2:P` → `model.js` maps rows to Word objects (keeping their
+   row index) and **filters to the active language** (see below) →
+   `queue.js` flushes any pending writes from a previous session →
+   `scheduler.js` builds the due queue.
 2. **Review loop:** `app.js` shows front → reveal → grade. On grade:
    scheduler computes new `(interval_days, due_date)`, stats are incremented,
    and `queue.js` issues an immediate write of `G{row}:L{row}`. Failures land
@@ -159,6 +170,51 @@ site/js/
 Blocks of ~10 minutes are stitched client-side from the Drive-stored PCM
 clips and played by one `<audio>` element; MediaSession supplies lock-screen
 and headphone controls. Platform limits are contractual, see ADR-0006.
+
+## V3: per-user sheets, onboarding & multi-language (#62/#63/#65, ADR-0008)
+
+Multi-user stays serverless: each user's sheet and audio folder live in
+their own Google account, created by the app at first sign-in and found
+again by **discovery, not configuration** — the same `drive.file` query
+pattern as the audio folder (ADR-0007). `SPREADSHEET_ID` is gone from
+`config.js`, the deploy workflow, and the repo secrets; `sheets.js` receives
+the discovered ID once at startup (`setSpreadsheetId`). The sheet gains a
+second worksheet **`Settings`** (`A` = key, `B` = value); its first key,
+`learning_language`, doubles as the onboarding "done" signal: sheet exists
+AND language set → returning user, zero onboarding UI (silent token → Home,
+as before).
+
+New modules, same no-build vanilla-JS rules:
+
+```
+site/js/
+  settings.js        # Settings tab: read map, write learning_language
+  languages.js       # the curated language list (code/name/TTS code) —
+                     #   single source for the picker, column F, and TTS
+  onboardflow.js     # pure: which onboarding step comes next
+  onboardscreen.js   # the screens of design/onboarding.md
+site/migrate.html    # one-time legacy-sheet adoption (ADR-0008); unlinked
+```
+
+**Language rule (#65), one place:** immediately after `loadWords`, the app
+filters the mapped Word objects to rows whose column `F` matches
+`Settings!learning_language` (a blank `F` counts as matching — forgiving to
+hand-added rows). Everything downstream — scheduler queues, multiple-choice
+distractors, listen playlists, home counts, import dedupe, backfill — sees
+only active-language words, so no mode needs its own filter. Other-language
+rows wait untouched in the sheet. Import writes the active language to
+column `F` and passes its code to enrichment prompts and TTS
+(`speechConfig.languageCode` via `languages.js`); the Web Speech fallback
+picks a voice for the active language. The audio columns keep their
+historical `audio_*_es` headers — they mean "target language" now; renaming
+them would be a pointless migration. `_en` clips stay English: translations
+are English app-wide.
+
+**Legacy adoption (#63):** the owner's hand-made sheet is invisible to
+`drive.file` discovery, so it is adopted by a one-time verbatim copy
+(`Words!A2:P`, one batched write, old sheet only ever read) into an
+app-created sheet — mechanism and reasoning in ADR-0008, procedure in
+`docs/migration.md`.
 
 ## Out of scope for MVP (kept possible)
 
