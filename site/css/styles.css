@@ -396,48 +396,19 @@ button {
   margin-top: 0; /* the .menu gap, not .message .btn, spaces these */
 }
 
-/* Segmented control (design-system.md): mode picker under Review */
-
-.mode {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.segmented {
-  display: flex;
-  border: 1px solid var(--ink);
-  height: 48px;
-}
-
-.seg-cell {
-  flex: 1;
-  background: var(--paper);
-  color: var(--ink);
-  border: none;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.seg-cell + .seg-cell {
-  border-left: 1px solid var(--hairline);
-}
-
-.seg-cell.selected {
-  background: var(--ink);
-  color: var(--paper);
-}
-
-.seg-cell.disabled {
-  color: var(--muted);
-  cursor: default;
-}
-
-.seg-caption {
+/* Persistent caption directly under a menu button ("Choices needs at
+   least 4 words") — pulls into the 12px menu gap to sit close. */
+.btn-cap {
   font-size: 12px;
   color: var(--muted);
   letter-spacing: 0.02em;
+  margin-top: -4px;
+}
+
+/* Disabled menu button: regular weight on top of .btn.disabled colors
+   (design-system "Secondary / outline button" disabled state). */
+.menu .btn.disabled {
+  font-weight: 400;
 }
 
 .home-keys {
