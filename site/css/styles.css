@@ -114,6 +114,10 @@ button {
   align-items: center;
   padding: 16px;
   gap: 16px; /* spaces card · options · Next in choices mode */
+  /* Without this the stage's automatic minimum size lets it overflow the
+     body on short viewports, silently pushing bottom controls (Generate,
+     Cancel, Done) below the fold with no scrollbar (#61). */
+  min-height: 0;
 }
 
 .card {
@@ -473,6 +477,10 @@ button {
   gap: 12px;
   min-height: 0;
   padding-top: 8px;
+  /* Short viewports (small window, page zoom): the fixed-height textarea
+     would otherwise push the bottom buttons below the fold with no visible
+     scroll affordance (#61). */
+  overflow-y: auto;
 }
 
 .imp-body h3 {
@@ -557,6 +565,11 @@ button {
 
 .imp-spacer {
   flex: 1;
+  /* Grow a little so Generate reads as the screen's closing action, but cap
+     it: an uncapped spacer pins the button to the bottom of the viewport,
+     which lands off-screen when the window's bottom edge extends past the
+     physical display (#61). */
+  max-height: 96px;
 }
 
 /* Buttons stack in a column here — don't let .btn's flex:1 stretch them. */
