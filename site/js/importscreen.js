@@ -1,11 +1,13 @@
 // Import screen controller — issue #37 (design/word-import.md).
 //
-// Owns the #state-import section and its four sub-screens: a minimal
-// Gemini-key entry state (the gap Maya flagged on #27 — shown whenever no
-// key is saved, with inline validation via apikey.js), step 1 (paste /
-// upload), step 2 (batch progress with Cancel), and step 3 (report with
-// per-word retry). app.js shows the section and calls `open()`; this module
-// never touches other screens — leaving goes through `deps.onExit`.
+// Owns the #state-import section and its four sub-screens: the blocked
+// invitation (issue #64, design/key-setup.md — shown whenever no key is
+// saved; the guided setup replaces the old technical key entry), step 1
+// (paste / upload), step 2 (batch progress with Cancel), and step 3
+// (report with per-word retry). app.js shows the section and calls
+// `open()`; this module never touches other screens — leaving goes through
+// `deps.onExit`. The key-setup guide (keysetup.js) is the one exception:
+// it is a sibling overlay with its own entry contract, opened directly.
 //
 // All data access is injected (same pattern as importer.js), so this file
 // is pure DOM glue: app.js binds the importer, the sheet/Drive calls and
@@ -26,19 +28,10 @@ import {
   isGeneratorUnreachable,
 } from "./importflow.js";
 import { needsBackfill } from "./importer.js";
+import { openKeySetup } from "./keysetup.js";
+import { importSubscreen } from "./keysetupflow.js";
 
 const $ = (id) => document.getElementById(id);
-
-const KEY_CAPTIONS = {
-  checking: "Checking the key\u2026",
-  invalid:
-    "Key rejected \u2014 check the key and its website/API restrictions.",
-  "network-error":
-    "Couldn't check the key \u2014 check your connection and try again.",
-  empty: "Paste a key first.",
-  saved: "A key is saved on this device.",
-  removed: "Key removed.",
-};
 
 /**
  * Wire up the import screen once.
@@ -52,7 +45,8 @@ const KEY_CAPTIONS = {
  * @param {() => Promise<object[]>} deps.reloadWords refetch the sheet (and
  *   update the app's word list); resolves with the fresh Words
  * @param {(fileId: string) => Promise<Blob>} deps.fetchClip Drive download
- * @param {{getKey, setKey, clearKey, validateKey}} deps.apiKey apikey.js
+ * @param {{getKey}} deps.apiKey apikey.js — only the has-key check lives
+ *   here; saving, validating and removing belong to the guide (keysetup.js)
  * @param {string} deps.sheetUrl "Open sheet" target
  * @param {() => void} deps.onExit leave the import screen (app decides where)
  * @param {(text: string|null) => void} deps.setBanner show the sync-error
@@ -62,12 +56,8 @@ const KEY_CAPTIONS = {
 export function initImportScreen(deps) {
   const els = {
     close: $("imp-close"),
-    key: $("imp-key"),
-    keyInput: $("imp-key-input"),
-    keyCaption: $("imp-key-caption"),
-    keySave: $("imp-key-save"),
-    keyKeep: $("imp-key-keep"),
-    keyRemove: $("imp-key-remove"),
+    blocked: $("imp-blocked"),
+    setupKey: $("imp-setup-key"),
     input: $("imp-input"),
     text: $("imp-text"),
     upload: $("imp-upload"),
@@ -94,7 +84,7 @@ export function initImportScreen(deps) {
     errorBack: $("imp-error-back"),
   };
 
-  const SUBSCREENS = ["key", "input", "progress", "results", "error"];
+  const SUBSCREENS = ["blocked", "input", "progress", "results", "error"];
 
   let sub = null; // the visible subscreen name
   let running = false; // a batch (or retry) is in flight
@@ -114,39 +104,18 @@ export function initImportScreen(deps) {
     for (const id of SUBSCREENS) els[id].hidden = id !== name;
   }
 
-  // ------------------------------------------------------------- key entry
+  // ------------------------------------------------- key state (issue #64)
 
-  function keyCaption(kind) {
-    els.keyCaption.hidden = kind == null;
-    els.keyCaption.textContent = kind ? KEY_CAPTIONS[kind] : "";
+  /** Step 1 with a key, the blocked invitation without; also the landing
+   *  point whenever the key-setup guide hands control back — which is what
+   *  unlocks import immediately after a validated key, no reload. */
+  function showForKey() {
+    if (importSubscreen(deps.apiKey.getKey() != null) === "input") showInput();
+    else showSub("blocked");
   }
 
-  function showKey() {
-    const saved = deps.apiKey.getKey() != null;
-    els.keyInput.value = "";
-    els.keyKeep.hidden = !saved;
-    els.keyRemove.hidden = !saved;
-    keyCaption(saved ? "saved" : null);
-    showSub("key");
-    els.keyInput.focus();
-  }
-
-  async function saveKey() {
-    const value = els.keyInput.value.trim();
-    if (value === "") {
-      keyCaption("empty");
-      return;
-    }
-    keyCaption("checking");
-    els.keySave.disabled = true;
-    const verdict = await deps.apiKey.validateKey(value);
-    els.keySave.disabled = false;
-    if (verdict !== "ok") {
-      keyCaption(verdict);
-      return;
-    }
-    deps.apiKey.setKey(value);
-    showInput();
+  function openGuide() {
+    openKeySetup({ onDone: showForKey });
   }
 
   // ---------------------------------------------------------- step 1: input
@@ -620,17 +589,10 @@ export function initImportScreen(deps) {
 
   els.close.addEventListener("click", onClose);
 
-  els.keySave.addEventListener("click", () => void saveKey());
-  els.keyInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") void saveKey();
-  });
-  els.keyKeep.addEventListener("click", () => showInput());
-  els.keyRemove.addEventListener("click", () => {
-    deps.apiKey.clearKey();
-    els.keyKeep.hidden = true;
-    els.keyRemove.hidden = true;
-    keyCaption("removed");
-  });
+  // Into the guided key setup (issue #64): from the blocked invitation,
+  // and from "Change key" on step 1 (which lands on its manage state).
+  els.setupKey.addEventListener("click", openGuide);
+  els.keyChange.addEventListener("click", openGuide);
 
   els.text.addEventListener("input", refreshCount);
   els.upload.addEventListener("click", () => els.file.click());
@@ -641,7 +603,6 @@ export function initImportScreen(deps) {
     void startBatch(words.join("\n"));
   });
   els.backfill.addEventListener("click", () => void startBackfill());
-  els.keyChange.addEventListener("click", () => showKey());
 
   els.cancel.addEventListener("click", cancelRun);
 
@@ -661,8 +622,7 @@ export function initImportScreen(deps) {
   function open() {
     els.text.value = ""; // closing discarded any previous input
     report = { added: [], skipped: [], failed: [] };
-    if (deps.apiKey.getKey()) showInput();
-    else showKey();
+    showForKey();
   }
 
   return { open };

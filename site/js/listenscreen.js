@@ -11,6 +11,9 @@
 // no stats (ADR-0006) — nothing here touches the scheduler or the queue.
 
 import { nowPlayingLine, counterText, screenView } from "./listenflow.js";
+import { getKey } from "./apikey.js";
+import { openKeySetup } from "./keysetup.js";
+import { listenEmptyVariant } from "./keysetupflow.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -41,6 +44,8 @@ export function initListenScreen({ player, getWords, onExit, onImport }) {
     next: $("listen-next"),
     empty: $("listen-empty"),
     emptyImport: $("listen-import"),
+    nokey: $("listen-nokey"),
+    setupKey: $("listen-setup-key"),
     error: $("listen-error"),
     errorRetry: $("listen-retry"),
   };
@@ -49,9 +54,14 @@ export function initListenScreen({ player, getWords, onExit, onImport }) {
 
   function render(state) {
     const view = screenView(state);
+    // Empty with no key (issue #64, design/key-setup.md): invite into the
+    // key setup instead of the dead-end import CTA. Playback of stored
+    // clips needs no key, so this only ever replaces the *empty* state.
+    const emptyVariant = listenEmptyVariant(getKey() != null);
     els.body.hidden = view.screen !== "player";
     els.controls.hidden = view.screen !== "player";
-    els.empty.hidden = view.screen !== "empty";
+    els.empty.hidden = view.screen !== "empty" || emptyVariant !== "import";
+    els.nokey.hidden = view.screen !== "empty" || emptyVariant !== "no-key";
     els.error.hidden = view.screen !== "error";
     // toggleAttribute, not .hidden: the glyphs are SVG elements, which
     // have no `hidden` property — only the attribute works.
@@ -113,6 +123,21 @@ export function initListenScreen({ player, getWords, onExit, onImport }) {
   els.close.addEventListener("click", () => leave(onExit));
   els.emptyImport.addEventListener("click", () => leave(onImport));
   els.errorRetry.addEventListener("click", () => void player.start(getWords()));
+
+  // Into the guided key setup (issue #64). The guide overlays this screen
+  // (in the normal palette, by design), so Listen's global shortcuts are
+  // handed off while it is open — Space/Esc belong to the paste field.
+  // On return a re-render picks the right empty variant: with a key saved
+  // the invitation yields to the regular import CTA, no reload.
+  els.setupKey.addEventListener("click", () => {
+    document.removeEventListener("keydown", onKey);
+    openKeySetup({
+      onDone: () => {
+        document.addEventListener("keydown", onKey);
+        render(player.state());
+      },
+    });
+  });
 
   return {
     open() {

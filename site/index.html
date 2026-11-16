@@ -82,6 +82,17 @@
         </div>
       </div>
 
+      <!-- Empty with no key (issue #64): the import CTA would dead-end
+           into the import blocked state — route to the actual fix -->
+      <div id="listen-nokey" class="listen-center" hidden>
+        <div class="listen-message">
+          <h3>Nothing to listen to yet</h3>
+          <p>Audio is created when you import words &mdash; and that needs
+            a free Google AI key. About 2&nbsp;minutes to set up.</p>
+          <button id="listen-setup-key" class="btn inv" type="button">Set up the free key</button>
+        </div>
+      </div>
+
       <!-- Error: no block could be built at all (e.g. offline) -->
       <div id="listen-error" class="listen-center" hidden>
         <div class="listen-message">
@@ -114,30 +125,25 @@
     </section>
 
     <!-- Import screen (issue #37, design/word-import.md): slim header +
-         four sub-screens (key entry, add words, progress, results/error),
-         driven by js/importscreen.js -->
+         four sub-screens (blocked invitation, add words, progress,
+         results/error), driven by js/importscreen.js -->
     <section id="state-import" class="import" hidden>
       <header class="imp-head">
         <span class="imp-title">Import words</span>
         <button id="imp-close" class="close" type="button" aria-label="Close import">&#10005;</button>
       </header>
 
-      <!-- Gemini key entry (shown when no key is saved; ADR-0004) -->
-      <div id="imp-key" class="imp-body" hidden>
-        <h3>Gemini API key</h3>
-        <p class="imp-copy">
-          Generating translations, phrases and audio uses Google's Gemini API
-          with a free key from your own Google account &mdash; see
-          <a href="https://github.com/lab4-berlin/iv-flash-cards#gemini-api-key-ai-features"
-             target="_blank" rel="noopener">the setup guide</a>.
-          The key stays on this device.
-        </p>
-        <input id="imp-key-input" class="key-input" type="text"
-               placeholder="AIza&hellip;" autocomplete="off" spellcheck="false" />
-        <div id="imp-key-caption" class="cap" hidden></div>
-        <button id="imp-key-save" class="btn solid full" type="button">Save and continue</button>
-        <button id="imp-key-keep" class="btn outline full" type="button" hidden>Keep current key</button>
-        <button id="imp-key-remove" class="link-cap" type="button" hidden>Remove key</button>
+      <!-- No key saved (issue #64, design/key-setup.md): an invitation
+           into the guided key setup, not an error -->
+      <div id="imp-blocked" class="imp-body imp-center" hidden>
+        <div class="message">
+          <h3>Import uses Google's AI</h3>
+          <p>Translating words and creating audio needs a free AI key from
+            your Google account. The app walks you through getting one
+            &mdash; about 2&nbsp;minutes.</p>
+          <button id="imp-setup-key" class="btn solid full" type="button">Set up the free key</button>
+          <div class="btn-cap">Reviewing your cards works without it.</div>
+        </div>
       </div>
 
       <!-- Step 1: add words -->
@@ -154,7 +160,7 @@
         <!-- Backfill entry (#72): minimal placement, pending Nick's pass -->
         <button id="imp-backfill" class="btn outline full" type="button" hidden>Generate missing audio</button>
         <div id="imp-backfill-cap" class="cap backfill-cap" hidden></div>
-        <button id="imp-key-change" class="link-cap" type="button">Change API key</button>
+        <button id="imp-key-change" class="link-cap" type="button">Change key</button>
       </div>
 
       <!-- Step 2: batch progress -->
@@ -186,6 +192,76 @@
         <p class="imp-copy">Check your connection and API key, then try again.</p>
         <button id="imp-error-retry" class="btn solid single" type="button">Retry</button>
         <button id="imp-error-back" class="btn outline single" type="button">Back</button>
+      </div>
+    </section>
+
+    <!-- Key setup (issue #64, design/key-setup.md): the one-screen guided
+         flow + manage state. A self-contained overlay in the normal
+         palette (even over Listen), driven by js/keysetup.js via
+         openKeySetup({ onDone }) — never through app.js's state machine. -->
+    <section id="state-keysetup" class="keysetup" hidden>
+      <div class="ks-inner">
+        <header class="imp-head">
+          <span class="imp-title">Free Google AI key</span>
+          <button id="ks-close" class="close" type="button" aria-label="Close key setup">&#10005;</button>
+        </header>
+        <div class="ks-body">
+          <!-- The guide: why + four numbered steps (hidden in manage) -->
+          <div id="ks-guide" class="ks-guide">
+            <p class="ks-intro">Importing words and natural audio run on
+              Google's AI. Google gives every account a free key for it.
+              You create it once on Google's site and paste it here &mdash;
+              about 2&nbsp;minutes.</p>
+            <div class="ks-steps">
+              <div class="ks-step"><span class="n">1</span>
+                <div class="t">Open Google AI Studio and sign in with your
+                  Google account.
+                  <a class="btn outline ks-open" href="https://aistudio.google.com"
+                     target="_blank" rel="noopener">Open aistudio.google.com</a>
+                </div>
+              </div>
+              <div class="ks-step"><span class="n">2</span>
+                <div class="t">Click &ldquo;Get API key&rdquo;, then
+                  &ldquo;Create API key&rdquo;.
+                  <span class="cap">Buttons may be worded slightly
+                    differently &mdash; look for &ldquo;API key&rdquo;.</span>
+                </div>
+              </div>
+              <div class="ks-step"><span class="n">3</span>
+                <div class="t">Copy the key &mdash; a long jumble of letters
+                  and numbers starting with AIza.</div>
+              </div>
+              <div class="ks-step"><span class="n">4</span>
+                <div class="t">Come back here and paste it below.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Manage: a key is already saved (via "Change key" on Import) -->
+          <div id="ks-manage" class="ks-manage" hidden>
+            <h3>Your AI key</h3>
+            <p>A key is saved on this device.</p>
+            <div id="ks-masked" class="ks-masked"></div>
+            <p>It's used when you import words and to create audio. Saved
+              only on this device &mdash; other devices need it pasted
+              once too.</p>
+            <button id="ks-replace" class="btn outline full" type="button">Replace key</button>
+            <button id="ks-remove" class="link-cap" type="button">Remove key</button>
+          </div>
+
+          <div class="ks-spacer"></div>
+
+          <!-- Verdict: checking / ok / invalid / network-error -->
+          <div id="ks-verdict" class="ks-verdict" hidden>
+            <span id="ks-lead" class="ks-lead" hidden></span>
+            <span id="ks-why" class="ks-why"></span>
+          </div>
+
+          <input id="ks-input" class="key-input" type="text"
+                 placeholder="Paste your key here (AIza&hellip;)"
+                 autocomplete="off" autocapitalize="off" spellcheck="false" />
+          <button id="ks-check" class="btn disabled full" type="button" disabled>Check my key</button>
+        </div>
       </div>
     </section>
 
