@@ -1,10 +1,10 @@
 # ADR-0006: Hands-free playback via stitched WAV blocks and MediaSession
 
 **Status:** Accepted (amended 2026-11-16: recall cue sequence per #81,
-ramp-up block schedule per #82)
+ramp-up block schedule per #82, one-word first block per #89)
 **Date:** 2026-11-11
 **Deciders:** Maya (architect)
-**Related issues:** #29, #81, #82
+**Related issues:** #29, #81, #82, #89
 
 ## Context
 
@@ -38,14 +38,18 @@ Option 3:
   the whole pool has cycled. All clips are 24 kHz 16-bit PCM (ADR-0005),
   so stitching is plain `Int16Array` concatenation plus zero-filled gaps —
   no encoding.
-- **Block duration ramps up** (#82): the first block of a session targets
-  **~60 seconds** (≈ 3–4 words, ~12–16 clip fetches — audible playback
-  within a few seconds of pressing play), the second **~5 minutes**, the
-  third and all later blocks the full **~10 minutes**. The ramp is sized so
-  each block plays several times longer than the next block takes to
-  build: the 5-minute block is built during the 60-second one (~70 clips,
-  comfortably under a minute on a normal connection), and the 10-minute
-  block during the 5-minute one.
+- **Block duration ramps up** (#82, revised by #89): the first block of a
+  session is a **single word** (~16–18 s of audio, exactly **4 clip
+  fetches** before sound — the first Spanish word is audible ~2 s after
+  pressing play on a normal connection), the second targets **~60
+  seconds**, the third **~5 minutes**, the fourth and all later blocks the
+  full **~10 minutes**. The ramp is sized so each block plays longer than
+  the next block takes to build: the ~60 s block (12–16 clips) builds
+  during the one-word block's ~17 s — a few seconds at the fetch cap —
+  the 5-minute block during the 60-second one, and the 10-minute block
+  during the 5-minute one. Block builds must not fetch ahead of need: the
+  one-word block issues exactly its word's 4 clip fetches before playback
+  starts (falling through to the next word only if one of them fails).
 - One persistent `<audio>` element plays block N while block N+1 is built
   in the background (clips fetched from Drive — capped concurrent fetches
   across words — and cached in memory). On `ended`, the player swaps in
@@ -66,13 +70,14 @@ Option 3:
   blocks it; the lock screen keeps showing our media controls, and one tap
   of play (also from headphones/car) resumes with the next block.
   - **Steady state (unchanged):** worst case one tap every ~10 minutes.
-  - **Session start (new with the ramp):** two extra best-effort
-    boundaries, ~1 minute and ~6 minutes after play. The first lands
-    moments after the user pressed play, normally still in the foreground
-    where the swap succeeds silently. Worst case — phone locked
-    immediately after play — up to two extra taps during the first
-    ~6 minutes, then the ~10-minute cadence. Accepted as the price of
-    starting in seconds instead of 30–40 s of silence.
+  - **Session start (revised by #89):** three best-effort boundaries, at
+    ~20 s, ~1:20, and ~6:20 after play. The first two land shortly after
+    the user pressed play, normally still in the foreground where the
+    swap succeeds silently. Worst case — phone locked immediately after
+    play — up to **three** extra taps during the first ~6½ minutes (one
+    more than the previous contract, and only the new ~20 s boundary is
+    ever plausibly under lock), then the ~10-minute cadence. Accepted as
+    the price of first audio in ~2 s instead of ~5 s or more.
 - Not a native app: true gapless infinite playback plus guaranteed
   background operation would require the mobile app (#9). This ADR is the
   best achievable in-browser without AAC encoding machinery.
@@ -111,3 +116,25 @@ configurable; eligibility (all four clips required) unchanged.
 - *MSE/ManagedMediaSource with AAC* — would remove boundaries entirely but
   stays rejected for the reasons in the original decision; this amendment
   does not reopen it.
+
+**2026-11-16 — one-word first block (#89).** Shipped #82 still meant 12–16
+clip fetches before any sound — ≤ 5 s on paper, perceptibly slow in real
+use. The first block shrinks to a **single word**: 4 clip fetches, audio
+~2 s after play; the schedule becomes 1 word → ~60 s → ~5 min → ~10 min.
+Build margins hold: the tightest pair is the ~60 s block building during
+the one-word block's ~17 s of playback, a few seconds of fetching at the
+concurrency cap. Revised iOS worst case under lock: up to three taps in a
+session's first ~6½ minutes (new best-effort boundary ~20 s in, which in
+practice is almost always still foreground), steady state unchanged at one
+per ~10 minutes. Alternatives rejected:
+
+- *Keep the 60 s first block, prioritize the first word's fetches* — no
+  help: a stitched block only plays once fully built, so sound still
+  waits for all 12–16 clips. The block itself must shrink.
+- *One word, then straight to ~10 minutes* — the ~140-clip block would
+  have to build within ~77 s of playback; fragile on slow connections.
+  Keeping the 60 s and 5 min steps preserves a wide margin at every
+  boundary.
+- *One-word blocks throughout* — a possible lock-screen tap every ~17 s on
+  iPhone; breaks the platform contract (same reason the constant ~3-word
+  blocks were rejected in #82).
