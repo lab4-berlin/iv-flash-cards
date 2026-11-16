@@ -4,8 +4,9 @@
 //
 // The player (separate module) consumes this to stitch WAV blocks: it
 // shuffles the eligible pool, takes blocks of whole words off the queue
-// (60 s → 5 min → ~10 min per session, #82), and reshuffles when the pool
-// has cycled — so no word repeats until every word has played once.
+// (1 word → ~60 s → ~5 min → ~10 min per session, #82/#89), and reshuffles
+// when the pool has cycled — so no word repeats until every word has
+// played once.
 
 /** Recall pause after each Spanish clip, before its translation (#81). */
 export const GAP_RECALL_MS = 2000;
@@ -20,12 +21,14 @@ export const GAP_BETWEEN_WORDS_MS = 2000;
 /** Default steady-state block length target (~10 minutes, ADR-0006). */
 export const DEFAULT_BLOCK_MS = 10 * 60 * 1000;
 
-/** Ramp-up block schedule for the start of a session (#82, ADR-0006 as
- * amended): the first block targets ~60 s so audio starts within seconds,
- * the second ~5 minutes; every later block uses the steady target. Each
- * block plays several times longer than the next one takes to build, so
- * prefetch always has margin. */
-export const BLOCK_TARGET_SCHEDULE_MS = [60_000, 300_000];
+/** Ramp-up block schedule for the start of a session (#82/#89, ADR-0006 as
+ * amended): the first block is a single word — a 1 ms target takes exactly
+ * one whole word, because blocks take whole words and stop once the target
+ * is reached — so audio starts after just that word's 4 clip fetches. The
+ * second block targets ~60 s, the third ~5 minutes; every later block uses
+ * the steady target. Each block plays several times longer than the next
+ * one takes to build, so prefetch always has margin. */
+export const BLOCK_TARGET_SCHEDULE_MS = [1, 60_000, 300_000];
 
 /**
  * Target duration of a session's `blockIndex`-th block (0-based): the

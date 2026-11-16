@@ -7,10 +7,10 @@ import { pcmToWav } from "../site/js/tts.js";
 // All fake clips use 1000 Hz (1 sample = 1 ms) for readable time math,
 // like the stitcher tests. Every clip is CLIP_MS long, so one word is
 // 4 × CLIP_MS + 7000 ms of gaps (#81 sequence) = 31000 ms. Block 1 of a
-// session targets 60 s (#82 ramp) and therefore takes exactly two words
-// (31000 < 60000 → take another → 62000 ≥ 60000); with the default
-// 3-word pool, block 2 (5-minute target) holds just word 3, the cycle's
-// end — the same two-then-one block shape the suite always used.
+// session is a single word (#89 ramp: 1 ms target), block 2 targets 60 s
+// and takes exactly two words (31000 < 60000 → take another →
+// 62000 ≥ 60000) — so with the default 3-word pool, block 1 holds word 1
+// and block 2 holds words 2–3, the cycle's end.
 const RATE = 1000;
 const CLIP_MS = 6000;
 const WORD_MS = 4 * CLIP_MS + 7000;
@@ -154,9 +154,30 @@ test("start plays the first block and prefetches the next", async () => {
     assert.equal(typeof t.mediaSession.handlers.get(action), "function");
   }
 
-  // Block 1 = words 1+2; block 2 (word 3) builds in the background.
+  // Block 1 = word 1; block 2 (60 s target: words 2+3) builds in the
+  // background once block 1 plays.
   await settle();
+  assert.ok(t.fetched.includes("2-we"));
   assert.ok(t.fetched.includes("3-we"));
+  // Exactly the two blocks' words were fetched — nothing ahead of need.
+  assert.equal(t.fetched.length, 12);
+});
+
+test("cold start issues exactly the first word's 4 fetches before play (#89)", async () => {
+  // Plenty of queued words and slow fetches: without the #89 bound the
+  // 6-slot limiter would already have started word 2's clips.
+  const t = setup({ poolSize: 15, fetchTicks: 3 });
+  let fetchedAtFirstPlay = null;
+  const play = t.audio.play.bind(t.audio);
+  t.audio.play = async () => {
+    fetchedAtFirstPlay ??= [...t.fetched];
+    return play();
+  };
+  await t.player.start(t.pool);
+
+  assert.deepEqual(fetchedAtFirstPlay.sort(), ["1-pe", "1-pn", "1-we", "1-wn"]);
+  assert.equal(t.audio.src, "blob:1");
+  assert.equal(t.player.state(), "playing");
 });
 
 // --------------------------------------------------------------- now playing
@@ -184,7 +205,9 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
   // Metadata holds the same word through the whole 8-segment sequence.
   assert.deepEqual(t.mediaSession.metadata, { title: "es1", artist: "en1" });
 
-  await t.audio.playTo(31.5); // word 2's word_es clip (31–37 s)
+  // Word 2 arrives with block 2 (the one-word first block holds word 1 only).
+  await settle();
+  await t.audio.end();
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[1],
     clip: "word_es",
@@ -195,7 +218,7 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
 
   // No duplicate emissions while staying inside one segment.
   const emissions = t.playing.length;
-  await t.audio.playTo(31.6);
+  await t.audio.playTo(0.5); // still inside word 2's word_es (0–6 s)
   assert.equal(t.playing.length, emissions);
 });
 
@@ -226,16 +249,18 @@ test("now-playing walks all 8 segments of a word in the #81 order", async () => 
 test("ended swaps to the prefetched block, revokes the old URL, loops the cycle", async () => {
   const t = setup();
   await t.player.start(t.pool);
-  await settle(); // block 2 (word 3, cycle end) prefetched
+  await settle(); // block 2 (words 2–3, cycle end) prefetched
 
+  // Word 1 was consumed by block 1: block 2 continues at position 2, it
+  // does not replay the first word.
   await t.audio.end();
   assert.equal(t.audio.src, "blob:2");
   assert.deepEqual(t.revoked, ["blob:1"]);
   assert.equal(t.audio.plays, 2);
   assert.deepEqual(t.playing.at(-1), {
-    word: t.pool[2],
+    word: t.pool[1],
     clip: "word_es",
-    position: 3,
+    position: 2,
     cycleSize: 3,
   });
   assert.equal(t.player.state(), "playing");
@@ -258,17 +283,20 @@ test("ended swaps to the prefetched block, revokes the old URL, loops the cycle"
 test("skipWord seeks to the next word's cue within the block", async () => {
   const t = setup();
   await t.player.start(t.pool);
+  await settle();
+  await t.audio.end(); // into block 2: words 2 and 3
+  const plays = t.audio.plays;
 
-  t.audio.currentTime = 15.5; // inside word 1's phrase_es
+  t.audio.currentTime = 15.5; // inside word 2's phrase_es
   await t.player.skipWord();
-  assert.equal(t.audio.currentTime, WORD_MS / 1000); // word 2's cue
+  assert.equal(t.audio.currentTime, WORD_MS / 1000); // word 3's cue
   assert.deepEqual(t.playing.at(-1), {
-    word: t.pool[1],
+    word: t.pool[2],
     clip: "word_es",
-    position: 2,
+    position: 3,
     cycleSize: 3,
   });
-  assert.equal(t.audio.plays, 1); // a seek, not a restart
+  assert.equal(t.audio.plays, plays); // a seek, not a restart
 });
 
 test("skipWord at the block's last word starts the next block", async () => {
@@ -276,10 +304,10 @@ test("skipWord at the block's last word starts the next block", async () => {
   await t.player.start(t.pool);
   await settle();
 
-  t.audio.currentTime = 35.0; // inside word 2, the block's last cue
+  t.audio.currentTime = 15.0; // inside word 1, the one-word block's only cue
   await t.player.skipWord();
   assert.equal(t.audio.src, "blob:2");
-  assert.equal(t.playing.at(-1).word, t.pool[2]);
+  assert.equal(t.playing.at(-1).word, t.pool[1]);
   assert.equal(t.player.state(), "playing");
 });
 
@@ -320,41 +348,46 @@ test("MediaSession action handlers drive the player", async () => {
   assert.equal(t.playing.at(-1).clip, "word_es"); // lands on the word's start
 });
 
-// --------------------------------------------- ramp-up block schedule (#82)
+// ---------------------------------------- ramp-up block schedule (#82/#89)
 
-test("block targets ramp 60 s → 5 min → steady across start → advance → advance", async () => {
+test("block targets ramp 1 word → 60 s → 5 min → steady across the session", async () => {
   // 15 words of 31 s each, steady target injected as one word. Block 1
-  // (60 s) = words 1–2; block 2 (5 min) = words 3–12 (9 × 31 s < 300 s, the
-  // 10th crosses it); block 3 (steady) = word 13.
+  // (1 ms) = word 1; block 2 (60 s) = words 2–3; block 3 (5 min) = words
+  // 4–13 (9 × 31 s < 300 s, the 10th crosses it); block 4 (steady) =
+  // word 14.
   const t = setup({ poolSize: 15, blockMs: WORD_MS });
   await t.player.start(t.pool);
   assert.equal(t.playing.at(-1).position, 1);
 
   await settle();
   await t.audio.end();
-  assert.equal(t.playing.at(-1).position, 3, "60 s block held exactly 2 words");
+  assert.equal(t.playing.at(-1).position, 2, "first block held exactly 1 word");
 
   await settle();
   await t.audio.end();
-  assert.equal(t.playing.at(-1).position, 13, "5-min block held exactly 10 words");
+  assert.equal(t.playing.at(-1).position, 4, "60 s block held exactly 2 words");
 
   await settle();
   await t.audio.end();
-  assert.equal(t.playing.at(-1).position, 14, "steady block held one 31 s word");
+  assert.equal(t.playing.at(-1).position, 14, "5-min block held exactly 10 words");
+
+  await settle();
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 15, "steady block held one 31 s word");
 });
 
-test("a fresh start() resets the ramp to the small first block", async () => {
+test("a fresh start() resets the ramp to the one-word first block", async () => {
   const t = setup({ poolSize: 15, blockMs: WORD_MS });
   await t.player.start(t.pool);
   await settle();
-  await t.audio.end(); // into block 2 — the session is past the 60 s target
-  assert.equal(t.playing.at(-1).position, 3);
+  await t.audio.end(); // into block 2 — the session is past the 1-word target
+  assert.equal(t.playing.at(-1).position, 2);
 
   await t.player.start(t.pool); // new session, same player
   assert.equal(t.playing.at(-1).position, 1);
   await settle();
   await t.audio.end();
-  assert.equal(t.playing.at(-1).position, 3, "first block is the 60 s one again");
+  assert.equal(t.playing.at(-1).position, 2, "first block is one word again");
 });
 
 test("skipWord from a block's last word advances with the correct next target", async () => {
@@ -362,26 +395,28 @@ test("skipWord from a block's last word advances with the correct next target", 
   await t.player.start(t.pool);
   await settle(); // block 2 prefetched
 
-  t.audio.currentTime = 35.0; // inside word 2, the 60 s block's last cue
+  t.audio.currentTime = 15.0; // inside word 1, the one-word block's only cue
   await t.player.skipWord();
-  assert.equal(t.playing.at(-1).position, 3);
+  assert.equal(t.playing.at(-1).position, 2);
   assert.equal(t.player.state(), "playing");
 
   await settle();
   await t.audio.end();
-  assert.equal(t.playing.at(-1).position, 13, "the skipped-to block used the 5-min target");
+  assert.equal(t.playing.at(-1).position, 4, "the skipped-to block used the 60 s target");
 });
 
 test("clip fetches pipeline across words, capped at 6 in flight", async () => {
-  // Overlapping fetches (3 ticks each): the 60 s first block alone needs 8
+  // Overlapping fetches (3 ticks each): the 60 s block 2 alone needs 8
   // clips, so the limiter fills — but never exceeds — its 6 slots.
   const t = setup({ poolSize: 15, blockMs: WORD_MS, fetchTicks: 3 });
   await t.player.start(t.pool);
-  assert.equal(t.concurrency.peak, 6);
-
-  await settle(); // the 10-word block-2 prefetch (40 clips) runs through too
+  await settle(); // block 2 (words 2–3) prefetched through the cap
   await t.audio.end();
-  assert.equal(t.playing.at(-1).position, 3, "pipelining kept queue order");
+  assert.equal(t.playing.at(-1).position, 2, "pipelining kept queue order");
+
+  await settle(); // the 10-word block-3 prefetch (40 clips) runs through too
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 4);
   assert.equal(t.concurrency.peak, 6, "cap held during the big prefetch");
 });
 
@@ -390,10 +425,12 @@ test("clip fetches pipeline across words, capped at 6 in flight", async () => {
 test("a word whose clip fetch fails is skipped silently", async () => {
   const t = setup({ fail: (id) => id.startsWith("2-") });
   await t.player.start(t.pool);
-
-  // Block 1 holds words 1 and 3 (positions 1 and 3); no error surfaced.
   assert.equal(t.player.state(), "playing");
-  await t.audio.playTo(WORD_MS / 1000);
+
+  // Block 2 (60 s target) skips word 2 and holds word 3 alone (position 3,
+  // the cycle counter not disturbed by the failure); no error surfaced.
+  await settle();
+  await t.audio.end();
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[2],
     clip: "word_es",
@@ -403,7 +440,25 @@ test("a word whose clip fetch fails is skipped silently", async () => {
   assert.ok(!t.states.includes("error"));
 });
 
+test("a failing first word slides the one-word block to the next word (#89)", async () => {
+  const t = setup({ fail: (id) => id.startsWith("1-"), fetchTicks: 3 });
+  await t.player.start(t.pool);
+
+  // Word 1's fetch failure released its pipeline slot: word 2 was fetched
+  // and became the one-word first block. Still no error.
+  assert.equal(t.player.state(), "playing");
+  assert.deepEqual(t.playing.at(-1), {
+    word: t.pool[1],
+    clip: "word_es",
+    position: 2,
+    cycleSize: 3,
+  });
+  assert.ok(!t.states.includes("error"));
+});
+
 test("start surfaces error when no block can be built at all", async () => {
+  // Every word fails: even the one-word first block walks the whole cycle
+  // and then reports the error state.
   const t = setup({ fail: () => true });
   await t.player.start(t.pool);
   assert.deepEqual(t.states, ["loading", "error"]);
@@ -412,9 +467,9 @@ test("start surfaces error when no block can be built at all", async () => {
 
 test("a failed prefetch is retried when the block boundary arrives", async () => {
   let down = true;
-  const t = setup({ fail: (id) => down && id.startsWith("3-") });
+  const t = setup({ fail: (id) => down && !id.startsWith("1-") });
   await t.player.start(t.pool);
-  await settle(); // prefetch of block 2 (word 3 alone) fails entirely
+  await settle(); // prefetch of block 2 (words 2–3) fails entirely
 
   down = false; // network back
   await t.audio.end();
