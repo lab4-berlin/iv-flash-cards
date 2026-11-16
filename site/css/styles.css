@@ -748,16 +748,31 @@ button {
   text-align: center;
 }
 
-/* The glanceable anchor: stays huge and fixed through the word's whole
-   8-step sequence. */
+/* The big Spanish slot (#90/#92): the word during the word half of the
+   sequence, the phrase during the phrase half. min-height reserves the
+   taller (two-line phrase) variant so the counter and controls never move
+   when word ↔ phrase swaps (driver-safety checklist). */
 .listen-word {
   font-size: 44px;
   font-weight: 600;
   line-height: 1.2;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-/* The clip being spoken now; min-height keeps the layout from shifting
-   when it is empty (word clip, gaps — driver-safety checklist). */
+/* Phrase variant: smaller and wrapping, but still clearly larger than the
+   20px translation line and readable at arm's length. */
+.listen-word.is-phrase {
+  font-size: 28px;
+  line-height: 1.4;
+}
+
+/* The matching English translation (#92): the word translation during the
+   word half, the phrase translation during the phrase half, hidden (empty)
+   during the recall pauses. min-height keeps the layout from shifting when
+   it is hidden (driver-safety checklist). */
 .listen-line {
   font-size: 20px;
   line-height: 1.5;
@@ -1093,6 +1108,11 @@ button {
 
   .listen-word {
     font-size: 64px;
+    min-height: 116px;
+  }
+
+  .listen-word.is-phrase {
+    font-size: 40px;
   }
 
   .home-keys {

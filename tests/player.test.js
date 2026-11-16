@@ -145,6 +145,7 @@ test("start plays the first block and prefetches the next", async () => {
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[0],
     clip: "word_es",
+    segment: 0,
     position: 1,
     cycleSize: 3,
   });
@@ -192,6 +193,7 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[0],
     clip: null, // the recall pause
+    segment: 1,
     position: 1,
     cycleSize: 3,
   });
@@ -211,6 +213,7 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[1],
     clip: "word_es",
+    segment: 0,
     position: 2,
     cycleSize: 3,
   });
@@ -242,6 +245,34 @@ test("now-playing walks all 8 segments of a word in the #81 order", async () => 
     "phrase_en",
     null,
   ]);
+  // The segment index (#92) walks 0–7 alongside: the probes above emitted
+  // one payload per segment, in order.
+  assert.deepEqual(
+    t.playing.map((np) => np.segment),
+    [0, 1, 2, 3, 4, 5, 6, 7]
+  );
+});
+
+test("gap-to-gap transitions emit: distinct gaps dedupe by segment (#92)", async () => {
+  const t = setup();
+  await t.player.start(t.pool);
+
+  await t.audio.playTo(6.5); // recall gap (segment 1)
+  assert.equal(t.playing.at(-1).segment, 1);
+
+  // A sparse timeupdate can jump straight from the recall gap to the
+  // breather gap (segment 3). Both have clip null, but they render
+  // differently (translation hidden vs shown) — a payload must be emitted.
+  const emissions = t.playing.length;
+  await t.audio.playTo(14.5);
+  assert.equal(t.playing.length, emissions + 1);
+  assert.deepEqual(t.playing.at(-1), {
+    word: t.pool[0],
+    clip: null,
+    segment: 3,
+    position: 1,
+    cycleSize: 3,
+  });
 });
 
 // ------------------------------------------------- block chaining & looping
@@ -260,6 +291,7 @@ test("ended swaps to the prefetched block, revokes the old URL, loops the cycle"
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[1],
     clip: "word_es",
+    segment: 0,
     position: 2,
     cycleSize: 3,
   });
@@ -273,6 +305,7 @@ test("ended swaps to the prefetched block, revokes the old URL, loops the cycle"
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[0],
     clip: "word_es",
+    segment: 0,
     position: 1,
     cycleSize: 3,
   });
@@ -293,6 +326,7 @@ test("skipWord seeks to the next word's cue within the block", async () => {
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[2],
     clip: "word_es",
+    segment: 0,
     position: 3,
     cycleSize: 3,
   });
@@ -434,6 +468,7 @@ test("a word whose clip fetch fails is skipped silently", async () => {
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[2],
     clip: "word_es",
+    segment: 0,
     position: 3,
     cycleSize: 3,
   });
@@ -450,6 +485,7 @@ test("a failing first word slides the one-word block to the next word (#89)", as
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[1],
     clip: "word_es",
+    segment: 0,
     position: 2,
     cycleSize: 3,
   });
