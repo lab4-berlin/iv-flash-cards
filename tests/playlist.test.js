@@ -6,6 +6,8 @@ import {
   GAP_BREATHER_MS,
   GAP_BETWEEN_WORDS_MS,
   DEFAULT_BLOCK_MS,
+  BLOCK_TARGET_SCHEDULE_MS,
+  blockTargetMs,
   eligibleWords,
   shuffle,
   wordSequence,
@@ -134,6 +136,25 @@ describe("wordSequence", () => {
     assert.equal(GAP_BREATHER_MS, 1000);
     assert.equal(GAP_BETWEEN_WORDS_MS, 2000);
     assert.equal(WORD_GAPS_MS, 7000);
+  });
+});
+
+describe("blockTargetMs (#82 ramp-up schedule)", () => {
+  test("the schedule is 60 s, then 5 minutes", () => {
+    assert.deepEqual(BLOCK_TARGET_SCHEDULE_MS, [60000, 300000]);
+  });
+
+  test("ramps 60 s → 5 min → steady ~10 min by default", () => {
+    assert.equal(blockTargetMs(0), 60000);
+    assert.equal(blockTargetMs(1), 300000);
+    assert.equal(blockTargetMs(2), DEFAULT_BLOCK_MS);
+    assert.equal(blockTargetMs(7), DEFAULT_BLOCK_MS);
+  });
+
+  test("steadyMs is injectable and only applies past the schedule", () => {
+    assert.equal(blockTargetMs(0, 8000), 60000);
+    assert.equal(blockTargetMs(1, 8000), 300000);
+    assert.equal(blockTargetMs(2, 8000), 8000);
   });
 });
 

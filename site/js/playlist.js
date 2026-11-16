@@ -3,9 +3,9 @@
 // no audio, no network; randomness and clip durations are injected.
 //
 // The player (separate module) consumes this to stitch WAV blocks: it
-// shuffles the eligible pool, takes ~10-minute blocks of whole words off
-// the queue, and reshuffles when the pool has cycled — so no word repeats
-// until every word has played once.
+// shuffles the eligible pool, takes blocks of whole words off the queue
+// (60 s → 5 min → ~10 min per session, #82), and reshuffles when the pool
+// has cycled — so no word repeats until every word has played once.
 
 /** Recall pause after each Spanish clip, before its translation (#81). */
 export const GAP_RECALL_MS = 2000;
@@ -17,8 +17,27 @@ export const GAP_BREATHER_MS = 1000;
  * keeps it as tail silence, so every word stays a fixed 8-segment unit. */
 export const GAP_BETWEEN_WORDS_MS = 2000;
 
-/** Default block length target (~10 minutes, ADR-0006). */
+/** Default steady-state block length target (~10 minutes, ADR-0006). */
 export const DEFAULT_BLOCK_MS = 10 * 60 * 1000;
+
+/** Ramp-up block schedule for the start of a session (#82, ADR-0006 as
+ * amended): the first block targets ~60 s so audio starts within seconds,
+ * the second ~5 minutes; every later block uses the steady target. Each
+ * block plays several times longer than the next one takes to build, so
+ * prefetch always has margin. */
+export const BLOCK_TARGET_SCHEDULE_MS = [60_000, 300_000];
+
+/**
+ * Target duration of a session's `blockIndex`-th block (0-based): the
+ * ramp-up schedule entry, or `steadyMs` past the schedule's end.
+ * @param {number} blockIndex
+ * @param {number} steadyMs steady-state target (injectable for tests).
+ */
+export function blockTargetMs(blockIndex, steadyMs = DEFAULT_BLOCK_MS) {
+  return blockIndex < BLOCK_TARGET_SCHEDULE_MS.length
+    ? BLOCK_TARGET_SCHEDULE_MS[blockIndex]
+    : steadyMs;
+}
 
 const AUDIO_FIELDS = ["audioWordEs", "audioPhraseEs", "audioWordEn", "audioPhraseEn"];
 
