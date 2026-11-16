@@ -9,8 +9,7 @@
 // failure; sync banner driven by the queue.
 //
 // Startup resolves the user's sheet by discovery (ADR-0008, #76): config.js
-// keeps only the OAuth client ID. A still-configured SPREADSHEET_ID is a
-// temporary owner-continuity fallback (removed by #77).
+// keeps only the OAuth client ID.
 
 import * as config from "./config.js";
 import * as auth from "./auth.js";
@@ -517,8 +516,7 @@ function advanceChoice() {
 // -------------------------------------------------------------------- startup
 //
 // After auth, `begin` resolves which spreadsheet this account uses
-// (ADR-0008): discovery via ensureSpreadsheet, or — temporary fallback,
-// removed by #77 — a still-configured SPREADSHEET_ID. Then onboardflow's
+// (ADR-0008): discovery via ensureSpreadsheet. Then onboardflow's
 // resume rules route the visit: a returning user (learning_language set)
 // goes straight to Home with zero new screens; a first run walks
 // design/onboarding.md's two steps.
@@ -591,14 +589,6 @@ function route(step) {
 /** Resolve the sheet, read settings, and route the visit. */
 async function begin() {
   showState("state-loading");
-
-  // Temporary owner-continuity fallback (removed by #77): a configured ID
-  // skips discovery — and onboarding — entirely: the pre-V3 startup.
-  if (config.SPREADSHEET_ID) {
-    applySheetId(config.SPREADSHEET_ID);
-    await loadAndBegin();
-    return;
-  }
 
   let settings;
   try {

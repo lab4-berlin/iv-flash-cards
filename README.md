@@ -47,30 +47,29 @@ latest deploy (issue #67).
 
 ## Configuration
 
-`site/js/config.js` holds the Google OAuth client ID and — optionally — a
-spreadsheet ID. It is **not** checked in (gitignored); the client ID comes
-out of the one-time setup below.
+`site/js/config.js` holds exactly one value: the Google OAuth client ID. It
+is **not** checked in (gitignored); the client ID comes out of the one-time
+setup below.
 
-The spreadsheet ID is no longer required: at first sign-in the app finds or
+The spreadsheet needs no configuration: at first sign-in the app finds or
 creates the vocabulary sheet in the signed-in user's own Drive
 ([ADR-0008](docs/adr/0008-per-user-sheet-discovery-and-legacy-adoption.md)).
-Set `SPREADSHEET_ID` to `""` to use discovery. A non-empty value still skips
-discovery and uses that sheet — a temporary owner-continuity fallback (#76)
-that #77 removes together with the export.
+To adopt a sheet that was made by hand (invisible to discovery), see
+[docs/migration.md](docs/migration.md).
 
-- **Local development:** copy the example and fill in your values:
+- **Local development:** copy the example and fill in your value:
 
   ```sh
   cp site/js/config.example.js site/js/config.js
   ```
 
 - **Production (GitHub Pages):** the deploy job generates `config.js` from
-  the `OAUTH_CLIENT_ID` and `SPREADSHEET_ID` repository secrets (GitHub repo
-  **Settings → Secrets and variables → Actions**). If either secret is
-  missing, the deploy fails instead of publishing a placeholder config.
+  the `OAUTH_CLIENT_ID` repository secret (GitHub repo **Settings → Secrets
+  and variables → Actions**). If the secret is missing, the deploy fails
+  instead of publishing a placeholder config.
 
-Both values stay visible in the deployed page's JS — the browser needs them.
-They are identifiers, not secrets; the only goal is keeping them out of the
+The value stays visible in the deployed page's JS — the browser needs it.
+It is an identifier, not a secret; the only goal is keeping it out of the
 public source (issue #24).
 
 ## One-time Google Cloud setup
@@ -104,17 +103,12 @@ manually, in the [Google Cloud console](https://console.cloud.google.com/):
      - `http://localhost:8000` (local development)
    - No authorized redirect URIs are needed (the GIS token client uses a
      popup, not redirects).
-5. **Wire up the IDs** (see [Configuration](#configuration)):
-   - The client ID shown after step 4 (ends in `.apps.googleusercontent.com`)
-     goes into `CLIENT_ID` in your local `config.js` and into the
-     `OAUTH_CLIENT_ID` repository secret.
-   - The spreadsheet ID is optional (see [Configuration](#configuration)):
-     leave `SPREADSHEET_ID` empty (`""`) and the app creates the sheet
-     itself at first sign-in. To keep using one specific existing sheet,
-     its ID — the long segment of the sheet's URL,
-     `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit` — goes
-     into `SPREADSHEET_ID` in your local `config.js` and into the
-     `SPREADSHEET_ID` repository secret.
+5. **Wire up the client ID** (see [Configuration](#configuration)): the ID
+   shown after step 4 (ends in `.apps.googleusercontent.com`) goes into
+   `CLIENT_ID` in your local `config.js` and into the `OAUTH_CLIENT_ID`
+   repository secret. No spreadsheet is configured anywhere — the app
+   creates the sheet itself at first sign-in; to adopt an existing
+   hand-made sheet, see [docs/migration.md](docs/migration.md).
 
 Notes:
 
@@ -122,9 +116,9 @@ Notes:
   sign in, Google shows an "unverified app" warning during consent, and it may
   occasionally re-prompt for consent. All acceptable for a single user
   (ADR-0001).
-- The client ID and spreadsheet ID are identifiers, not secrets — they are
-  visible in the deployed page's JS by design; they're only kept out of the
-  repo source. The sheet itself stays private behind Google sign-in.
+- The client ID is an identifier, not a secret — it is visible in the
+  deployed page's JS by design; it's only kept out of the repo source. The
+  sheet itself stays private behind Google sign-in.
 
 ## Audio clips in Google Drive
 

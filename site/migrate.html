@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <title>Migrate a legacy sheet &mdash; IV Flash Cards</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script src="https://accounts.google.com/gsi/client" async></script>
+</head>
+<body>
+  <!-- One-time legacy-sheet migration (ADR-0008, docs/migration.md).
+       Deliberately UNLINKED from the app: reached by URL only. Minimal
+       chrome, production modules — driven by js/migratepage.js. -->
+  <main class="stage">
+    <section id="mig-signin" class="message" hidden>
+      <h3>Migrate a legacy sheet</h3>
+      <p id="mig-signin-hint">Sign in with the Google account that owns the old sheet.</p>
+      <button id="mig-signin-btn" class="btn solid single" type="button">Sign in with Google</button>
+    </section>
+
+    <section id="mig-form" class="message" hidden>
+      <h3>Migrate a legacy sheet</h3>
+      <p>Paste the old sheet's URL or ID. Its rows are copied into the
+        app's own sheet &mdash; the old sheet is only ever read, never
+        modified.</p>
+      <input id="mig-source" class="key-input" type="text"
+             placeholder="https://docs.google.com/spreadsheets/d/&hellip;"
+             autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <p id="mig-error" class="warn" hidden></p>
+      <button id="mig-run" class="btn solid single" type="button">Copy into the app's sheet</button>
+    </section>
+
+    <section id="mig-running" class="message" hidden>
+      <h3>Migrating&hellip;</h3>
+      <p id="mig-status"></p>
+    </section>
+
+    <section id="mig-done" class="message" hidden>
+      <h3>Migration complete</h3>
+      <p id="mig-report"></p>
+      <p>Open the app on any device and sign in &mdash; it finds this sheet
+        automatically.</p>
+    </section>
+  </main>
+
+  <script type="module" src="js/migratepage.js"></script>
+</body>
+</html>
