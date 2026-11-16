@@ -851,6 +851,155 @@ button {
   color: var(--ink-inv);
 }
 
+/* ---- key setup (issue #64, design/key-setup.md) ---- */
+
+/* A self-contained overlay like .listen, but always the normal palette —
+   inversion never applies to a borrowed screen (design-system rule). Sits
+   above the listen overlay (z-index) and scrolls on short viewports: the
+   paste field and button close the reading order, which is the task order. */
+.keysetup {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.ks-inner {
+  flex: 1;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 0 16px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ks-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.keysetup .btn {
+  flex: none; /* buttons stack in a column here, like .import */
+}
+
+.ks-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ks-intro {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Numbered steps: hanging number column (mockup). */
+.ks-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ks-step {
+  display: flex;
+  gap: 12px;
+}
+
+.ks-step .n {
+  font-size: 16px;
+  font-weight: 600;
+  width: 16px;
+  flex: none;
+}
+
+.ks-step .t {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+/* Step 2's muted caption absorbs AI Studio UI drift (design). */
+.ks-step .t .cap {
+  display: block;
+  margin-top: 2px;
+}
+
+/* Step 1's outline link-button into AI Studio (new tab). */
+.ks-open {
+  display: inline-flex;
+  min-height: 40px;
+  font-size: 14px;
+  padding: 0 20px;
+  margin-top: 8px;
+}
+
+/* Pushes the paste field toward the end without pinning it off-screen
+   on tall windows (same rationale as .imp-spacer, #61). */
+.ks-spacer {
+  flex: 1;
+  max-height: 96px;
+}
+
+/* Verdict block between the field and the button: weight-600 lead
+   (✓ ok / ✕ invalid / glyph-free network-error) + muted explanation. */
+.ks-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ks-lead {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ks-why {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Manage state: centered message block with the masked key (mockup). */
+.ks-manage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+  max-width: 320px;
+  width: 100%;
+  margin: 24px auto 0;
+}
+
+.ks-manage h3 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.ks-manage p {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.ks-masked {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 8px 0;
+}
+
+.ks-manage .btn {
+  width: 100%;
+}
+
 /* ---- message states ---- */
 
 .message {
