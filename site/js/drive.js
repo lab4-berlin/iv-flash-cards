@@ -1,4 +1,5 @@
-// Google Drive storage for audio clips — ADR-0005, ADR-0007, issues #35, #54.
+// Google Drive storage for audio clips (ADR-0005, ADR-0007, issues #35,
+// #54) and discovery of the app-created vocabulary spreadsheet (ADR-0008).
 //
 // Uses the app's OAuth token (NOT the Gemini API key) with the narrow
 // `drive.file` scope: the app only sees files it created. All clips live in
@@ -12,7 +13,9 @@
 
 const FILES_API = "https://www.googleapis.com/drive/v3/files";
 const UPLOAD_API = "https://www.googleapis.com/upload/drive/v3/files";
+const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const FOLDER_MIME = "application/vnd.google-apps.folder";
+const SPREADSHEET_MIME = "application/vnd.google-apps.spreadsheet";
 
 /**
  * Name given to the clips folder when the app creates it (ADR-0007). Only
@@ -20,6 +23,13 @@ const FOLDER_MIME = "application/vnd.google-apps.folder";
  * may rename the folder afterwards.
  */
 export const FOLDER_NAME = "IV Flash Cards Audio";
+
+/**
+ * Name given to the vocabulary spreadsheet when the app creates it
+ * (ADR-0008). Like {@link FOLDER_NAME}, only used at creation time —
+ * discovery never matches on the name.
+ */
+export const SPREADSHEET_NAME = "IV Flash Cards";
 
 /** Any non-OK Drive API response. `status` is the HTTP status code. */
 export class DriveError extends Error {
@@ -92,6 +102,86 @@ export async function ensureFolder(token) {
   );
   cachedFolderId = created.id;
   return cachedFolderId;
+}
+
+let cachedSpreadsheetId = null;
+
+/** Forget the cached spreadsheet ID (used by tests). */
+export function resetSpreadsheetCache() {
+  cachedSpreadsheetId = null;
+}
+
+/**
+ * Discover or create the user's vocabulary spreadsheet and return its ID
+ * (ADR-0008) — the ensureFolder pattern applied to the spreadsheet.
+ *
+ * Discovery queries Drive for non-trashed spreadsheets — under `drive.file`
+ * that can only return spreadsheets the app itself created, so no name
+ * matching and no persisted ID are needed, and the user may freely
+ * move/rename the sheet. If several exist (historical accident), the
+ * oldest by `createdTime` wins. If none exists, "IV Flash Cards" is
+ * created through the Drive API (so `drive.file` visibility is beyond
+ * doubt) and a Sheets `batchUpdate` renames the default tab to `Words`.
+ * Headers and the `Settings` tab are ensureTabs's job (sheets.js).
+ *
+ * The ID is cached in module memory for the session; nothing is persisted.
+ *
+ * @param {string} token OAuth access token (`drive.file` + `spreadsheets`)
+ * @returns {Promise<string>} the spreadsheet's Drive file ID
+ * @throws {DriveAuthError} on 401, {DriveError} on other API failures
+ */
+export async function ensureSpreadsheet(token) {
+  if (cachedSpreadsheetId) return cachedSpreadsheetId;
+
+  const params = new URLSearchParams({
+    q: `mimeType='${SPREADSHEET_MIME}' and trashed=false`,
+    fields: "files(id,createdTime)",
+    orderBy: "createdTime",
+  });
+  const found = await driveFetch(
+    token,
+    `${FILES_API}?${params}`,
+    {},
+    "discover spreadsheet",
+  );
+  if (found.files?.length) {
+    cachedSpreadsheetId = found.files[0].id;
+    return cachedSpreadsheetId;
+  }
+
+  const created = await driveFetch(
+    token,
+    `${FILES_API}?fields=id`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: SPREADSHEET_NAME, mimeType: SPREADSHEET_MIME }),
+    },
+    "create spreadsheet",
+  );
+  // A Drive-created spreadsheet starts with one default grid (sheetId 0);
+  // rename it to `Words` so the sheets.js ranges resolve.
+  await driveFetch(
+    token,
+    `${SHEETS_API}/${created.id}:batchUpdate`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: { sheetId: 0, title: "Words" },
+              fields: "title",
+            },
+          },
+        ],
+      }),
+    },
+    "rename default tab to Words",
+  );
+  cachedSpreadsheetId = created.id;
+  return cachedSpreadsheetId;
 }
 
 /**

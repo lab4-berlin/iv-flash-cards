@@ -11,6 +11,7 @@
 import { CLIENT_ID, SPREADSHEET_ID } from "./config.js";
 import * as auth from "./auth.js";
 import {
+  setSpreadsheetId,
   ensureHeader,
   loadWords,
   writeStats,
@@ -38,6 +39,8 @@ import { initImportScreen } from "./importscreen.js";
 import { createPlayer } from "./player.js";
 import { initListenScreen } from "./listenscreen.js";
 import { createClipPlayer, cardClipIds } from "./clipplayer.js";
+
+setSpreadsheetId(SPREADSHEET_ID); // injected, no longer imported by sheets.js (ADR-0008, #75)
 
 const $ = (id) => document.getElementById(id);
 
