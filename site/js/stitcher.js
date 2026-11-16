@@ -100,8 +100,8 @@ export function clipDuration(pcm, sampleRate = SAMPLE_RATE) {
  * @returns {{blob: Blob, offsetsMs: number[], totalMs: number}}
  *   `blob` is `audio/wav`; `offsetsMs[i]` is the sample-exact start of
  *   `segments[i]` in the block. Word cues follow: a word's actual start is
- *   the offset of its first segment (with playlist.js's fixed 6-segment
- *   word sequence, cue k sits at `offsetsMs[k * 6]`).
+ *   the offset of its first segment (with playlist.js's fixed 8-segment
+ *   word sequence, cue k sits at `offsetsMs[k * 8]`).
  */
 export function stitch(segments, clips) {
   const parts = segments.map((segment) => {

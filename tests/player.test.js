@@ -6,11 +6,12 @@ import { pcmToWav } from "../site/js/tts.js";
 
 // All fake clips use 1000 Hz (1 sample = 1 ms) for readable time math,
 // like the stitcher tests. Every clip is CLIP_MS long, so one word is
-// 4 × CLIP_MS + 2 × GAP_MS = 4400 ms, and with blockMs = 5000 a block
-// takes exactly two words (4400 < 5000 → take another → 8800 ≥ 5000).
+// 4 × CLIP_MS + 7000 ms of gaps (#81 sequence) = 7400 ms, and with
+// blockMs = 8000 a block takes exactly two words (7400 < 8000 → take
+// another → 14800 ≥ 8000).
 const RATE = 1000;
 const CLIP_MS = 100;
-const WORD_MS = 4 * CLIP_MS + 2 * 2000;
+const WORD_MS = 4 * CLIP_MS + 7000;
 
 /** Let promise chains (clip fetch → blob.arrayBuffer → parse) settle. */
 async function settle() {
@@ -77,7 +78,7 @@ function wavBlob(ms) {
  * Player wired to fakes. `fail(fileId)` makes that clip's fetch throw.
  * random always returns ~1, so shuffle keeps the original order.
  */
-function setup({ poolSize = 3, blockMs = 5000, fail = () => false } = {}) {
+function setup({ poolSize = 3, blockMs = 8000, fail = () => false } = {}) {
   const audio = new FakeAudio();
   const mediaSession = {
     metadata: null,
@@ -153,20 +154,26 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
   const t = setup();
   await t.player.start(t.pool);
 
-  // Word 1 segments: word_es 0–100, gap –2100, phrase_es –2200, gap –4200,
-  // word_en –4300, phrase_en –4400; word 2 starts at 4400.
+  // Word 1 segments: word_es 0–100, gap –2100, word_en –2200, gap –3200,
+  // phrase_es –3300, gap –5300, phrase_en –5400, gap –7400; word 2 at 7400.
   await t.audio.playTo(0.15);
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[0],
-    clip: null, // the gap
+    clip: null, // the recall pause
     position: 1,
     cycleSize: 3,
   });
 
   await t.audio.playTo(2.15);
+  assert.equal(t.playing.at(-1).clip, "word_en");
+  await t.audio.playTo(3.25);
   assert.equal(t.playing.at(-1).clip, "phrase_es");
+  await t.audio.playTo(5.35);
+  assert.equal(t.playing.at(-1).clip, "phrase_en");
+  // Metadata holds the same word through the whole 8-segment sequence.
+  assert.deepEqual(t.mediaSession.metadata, { title: "es1", artist: "en1" });
 
-  await t.audio.playTo(4.45); // word 2's word_es clip (4400–4500)
+  await t.audio.playTo(7.45); // word 2's word_es clip (7400–7500)
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[1],
     clip: "word_es",
@@ -177,8 +184,30 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
 
   // No duplicate emissions while staying inside one segment.
   const emissions = t.playing.length;
-  await t.audio.playTo(4.46);
+  await t.audio.playTo(7.46);
   assert.equal(t.playing.length, emissions);
+});
+
+test("now-playing walks all 8 segments of a word in the #81 order", async () => {
+  const t = setup();
+  await t.player.start(t.pool);
+
+  const seen = [];
+  // One probe inside each of word 1's eight segments (see timeline above).
+  for (const s of [0.05, 1.0, 2.15, 2.7, 3.25, 4.0, 5.35, 6.0]) {
+    await t.audio.playTo(s);
+    seen.push(t.playing.at(-1).clip);
+  }
+  assert.deepEqual(seen, [
+    "word_es",
+    null,
+    "word_en",
+    null,
+    "phrase_es",
+    null,
+    "phrase_en",
+    null,
+  ]);
 });
 
 // ------------------------------------------------- block chaining & looping
@@ -219,7 +248,7 @@ test("skipWord seeks to the next word's cue within the block", async () => {
   const t = setup();
   await t.player.start(t.pool);
 
-  t.audio.currentTime = 2.15; // inside word 1's phrase_es
+  t.audio.currentTime = 3.25; // inside word 1's phrase_es
   await t.player.skipWord();
   assert.equal(t.audio.currentTime, WORD_MS / 1000); // word 2's cue
   assert.deepEqual(t.playing.at(-1), {
@@ -236,7 +265,7 @@ test("skipWord at the block's last word starts the next block", async () => {
   await t.player.start(t.pool);
   await settle();
 
-  t.audio.currentTime = 5.0; // inside word 2, the block's last cue
+  t.audio.currentTime = 8.0; // inside word 2, the block's last cue
   await t.player.skipWord();
   assert.equal(t.audio.src, "blob:2");
   assert.equal(t.playing.at(-1).word, t.pool[2]);
@@ -249,7 +278,7 @@ test("pause freezes; resume restarts the interrupted clip from its start", async
   const t = setup();
   await t.player.start(t.pool);
 
-  await t.audio.playTo(2.15); // mid phrase_es (2100–2200)
+  await t.audio.playTo(2.15); // mid word_en (2100–2200)
   t.player.pause();
   assert.equal(t.player.state(), "paused");
   assert.equal(t.mediaSession.playbackState, "paused");
@@ -277,6 +306,7 @@ test("MediaSession action handlers drive the player", async () => {
   assert.equal(t.player.state(), "playing");
   await handler("nexttrack")();
   assert.equal(t.playing.at(-1).word, t.pool[1]);
+  assert.equal(t.playing.at(-1).clip, "word_es"); // lands on the word's start
 });
 
 // ------------------------------------------------------------ failure modes

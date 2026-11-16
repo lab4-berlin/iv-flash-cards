@@ -26,12 +26,12 @@ still strictly monochrome. It is the only inverted screen in the app.
 ```
 
 - **Current word**: 44px mobile / 64px web, weight 600, centered. Stays on
-  screen through the whole 6-step sequence of that word — this is the
+  screen through the whole 8-step sequence of that word — this is the
   glanceable anchor for the walking case.
 - **Now-playing line** (muted, 20px): shows the text of the clip currently
-  being spoken — the phrase, then the English word translation, then the
-  English phrase translation. Empty during the word clip itself and during
-  the 2-second pauses. Drivers ignore it; walkers can read along.
+  being spoken — the English word translation, then the Spanish phrase, then
+  the English phrase translation. Empty during the Spanish word clip itself
+  and during the pauses. Drivers ignore it; walkers can read along.
 - **Controls**, bottom-center: play/pause (96×96, solid white square, black
   glyph) and next-word (72×72, outline). Fixed positions, never move or
   disappear. **The entire screen outside the controls also toggles
@@ -41,9 +41,11 @@ still strictly monochrome. It is the only inverted screen in the app.
 
 ## Behavior
 
-- Sequence per word (from the issue): Spanish word → 2s pause → Spanish
-  phrase → 2s pause → English word translation → English phrase translation
-  → next word.
+- Sequence per word (#81, ADR-0006 as amended): Spanish word → 2s recall
+  pause → English word translation → 1s breather → Spanish phrase → 2s
+  recall pause → English phrase translation → 2s pause → next word. Each
+  Spanish clip is followed by a pause to recall its meaning before the
+  English confirmation.
 - Random order; no word repeats until the whole pool has played (then a new
   shuffled cycle starts — loops forever until stopped).
 - Only words with **all four clips** enter the pool; anything else is

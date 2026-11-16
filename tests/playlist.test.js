@@ -2,13 +2,18 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  GAP_MS,
+  GAP_RECALL_MS,
+  GAP_BREATHER_MS,
+  GAP_BETWEEN_WORDS_MS,
   DEFAULT_BLOCK_MS,
   eligibleWords,
   shuffle,
   wordSequence,
   buildBlockPlan,
 } from "../site/js/playlist.js";
+
+/** Total silence per word: 2s recall + 1s breather + 2s recall + 2s separator. */
+const WORD_GAPS_MS = GAP_RECALL_MS + GAP_BREATHER_MS + GAP_RECALL_MS + GAP_BETWEEN_WORDS_MS;
 
 /** Deterministic RNG (mulberry32) so shuffle tests are reproducible. */
 function seededRandom(seed) {
@@ -111,46 +116,65 @@ describe("shuffle", () => {
 });
 
 describe("wordSequence", () => {
-  test("matches the fixed #29 flow: es word · gap · es phrase · gap · en word · en phrase", () => {
+  test("matches the #81 recall flow: 8 segments, exact order and gap lengths", () => {
     assert.deepEqual(wordSequence(makeWord("a")), [
       { type: "clip", fileId: "a-wes" },
-      { type: "gap", ms: GAP_MS },
-      { type: "clip", fileId: "a-pes" },
-      { type: "gap", ms: GAP_MS },
+      { type: "gap", ms: 2000 }, // recall pause
       { type: "clip", fileId: "a-wen" },
+      { type: "gap", ms: 1000 }, // breather
+      { type: "clip", fileId: "a-pes" },
+      { type: "gap", ms: 2000 }, // recall pause
       { type: "clip", fileId: "a-pen" },
+      { type: "gap", ms: 2000 }, // inter-word separator
     ]);
   });
 
-  test("the gap is 2 seconds", () => {
-    assert.equal(GAP_MS, 2000);
+  test("gap constants: 2s recall, 1s breather, 2s separator — 7s per word", () => {
+    assert.equal(GAP_RECALL_MS, 2000);
+    assert.equal(GAP_BREATHER_MS, 1000);
+    assert.equal(GAP_BETWEEN_WORDS_MS, 2000);
+    assert.equal(WORD_GAPS_MS, 7000);
   });
 });
 
 describe("buildBlockPlan", () => {
-  // Each word: 4 clips of 1000 ms + two 2000 ms gaps = 8000 ms.
-  const WORD_MS = 8000;
+  // Each word: 4 clips of 1000 ms + 7000 ms of gaps = 11000 ms.
+  const WORD_MS = 4 * 1000 + WORD_GAPS_MS;
 
   test("takes whole words until the target is reached; boundaries on word boundaries", () => {
     const words = ["a", "b", "c", "d", "e"].map(makeWord);
     const durations = uniformDurations(words, 1000);
-    // Target 20s: a (8s) + b (16s) still short of 20s, c crosses it.
-    const plan = buildBlockPlan(words, 20000, durations);
+    // Target 30s: a (11s) + b (22s) still short of 30s, c crosses it.
+    const plan = buildBlockPlan(words, 30000, durations);
     assert.deepEqual(
       plan.cues.map((cue) => cue.word.word),
       ["a", "b", "c"]
     );
     assert.equal(plan.totalMs, 3 * WORD_MS);
-    assert.equal(plan.segments.length, 3 * 6, "no word is split across blocks");
+    assert.equal(plan.segments.length, 3 * 8, "no word is split across blocks");
     assert.deepEqual(
-      plan.segments.slice(-2).map((s) => s.fileId),
-      ["c-wen", "c-pen"],
-      "block ends exactly at the last word's final clip"
+      plan.segments.slice(-2),
+      [
+        { type: "clip", fileId: "c-pen" },
+        { type: "gap", ms: GAP_BETWEEN_WORDS_MS },
+      ],
+      "block ends with the last word's final clip plus its trailing separator"
     );
     assert.deepEqual(
       plan.remaining.map((w) => w.word),
       ["d", "e"]
     );
+  });
+
+  test("cues sit at k * 8: each word's first segment is its word_es clip", () => {
+    const words = ["a", "b", "c"].map(makeWord);
+    const plan = buildBlockPlan(words, 60000, uniformDurations(words, 1000));
+    for (const [k, cue] of plan.cues.entries()) {
+      assert.deepEqual(plan.segments[k * 8], {
+        type: "clip",
+        fileId: cue.word.audioWordEs,
+      });
+    }
   });
 
   test("cue offsets point at each word's start", () => {
@@ -175,8 +199,8 @@ describe("buildBlockPlan", () => {
       ["b-wen", 400],
       ["b-pen", 2000],
     ]);
-    const aMs = 700 + 2500 + 600 + 3200 + 2 * GAP_MS;
-    const bMs = 500 + 1500 + 400 + 2000 + 2 * GAP_MS;
+    const aMs = 700 + 2500 + 600 + 3200 + WORD_GAPS_MS;
+    const bMs = 500 + 1500 + 400 + 2000 + WORD_GAPS_MS;
     const plan = buildBlockPlan([a, b], 60000, durations);
     assert.deepEqual(
       plan.cues.map((cue) => cue.startMs),
@@ -213,9 +237,9 @@ describe("buildBlockPlan", () => {
     const words = Array.from({ length: 100 }, (_, i) => makeWord(`w${i}`));
     const durations = uniformDurations(words, 1000);
     const plan = buildBlockPlan(words, undefined, durations);
-    // 8s per word ⇒ 75 words reach exactly 600s.
-    assert.equal(plan.cues.length, 75);
-    assert.equal(plan.totalMs, 600000);
+    // 11s per word ⇒ 54 words (594s) fall short of 600s; the 55th crosses it.
+    assert.equal(plan.cues.length, 55);
+    assert.equal(plan.totalMs, 55 * WORD_MS);
   });
 
   test("throws when a clip duration is missing", () => {
