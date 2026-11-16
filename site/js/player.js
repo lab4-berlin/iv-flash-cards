@@ -20,6 +20,9 @@ import {
   buildBlockPlan,
   blockTargetMs,
   DEFAULT_BLOCK_MS,
+  GAP_RECALL_MS,
+  GAP_BREATHER_MS,
+  GAP_BETWEEN_WORDS_MS,
 } from "./playlist.js";
 import { stitch, clipDuration, createClipCache } from "./stitcher.js";
 
@@ -37,6 +40,12 @@ const SEGMENT_KINDS = ["word_es", null, "word_en", null, "phrase_es", null, "phr
 /** Cap on clip fetches in flight while building a block (#82): upcoming
  * words' clips are pipelined up to this many concurrent Drive requests. */
 const MAX_CLIP_FETCHES = 6;
+
+/** Conservative lower bound on one word's stitched length — its gaps alone
+ * (clips counted as zero). Bounds fetch pipelining to words that can still
+ * fit in the block being built (#89): a 1 ms target admits exactly one
+ * word, so the one-word first block issues exactly 4 clip fetches. */
+const MIN_WORD_MS = GAP_RECALL_MS * 2 + GAP_BREATHER_MS + GAP_BETWEEN_WORDS_MS;
 
 function clipIds(word) {
   return [word.audioWordEs, word.audioPhraseEs, word.audioWordEn, word.audioPhraseEn];
@@ -83,8 +92,8 @@ function indexAt(startsMs, ms) {
  *   blockMs?: number,
  * }} options `fetchClip` is normally drive.fetchClip with the token bound
  *   by the caller; everything else defaults to the real browser APIs.
- *   `blockMs` is the steady-state block target used once the #82 ramp-up
- *   schedule (60 s, then 5 min) is past.
+ *   `blockMs` is the steady-state block target used once the ramp-up
+ *   schedule (one word, then 60 s, then 5 min; #82/#89) is past.
  * @returns {{
  *   start: (words: object[]) => Promise<void>,
  *   pause: () => void,
@@ -175,11 +184,17 @@ export function createPlayer({
    * block reaches `targetMs` or the cycle ends (a block never spans a
    * reshuffle), fetch their clips, and stitch. Upcoming words' clips are
    * fetched concurrently — at most MAX_CLIP_FETCHES in flight in total
-   * (#82) — but words enter the block strictly in queue order. A word
+   * (#82) — but words enter the block strictly in queue order, and fetches
+   * only start for words that can still fit in the block (#89): a word is
+   * admitted to the fetch pipeline while the block's conservative minimum
+   * length — actual ms of the words taken so far plus MIN_WORD_MS for each
+   * admitted word still ahead — is below the target. A 1 ms target thus
+   * issues exactly the first word's 4 fetches before playback. A word
    * whose clips cannot be fetched is skipped silently — never a gap or an
-   * error (#29); the cache does not keep failures, so the word gets
-   * retried next cycle. Throws only if not a single word could be built
-   * (e.g. offline).
+   * error (#29) — and releases its reservation, sliding the bound to the
+   * next word; the cache does not keep failures, so the word gets retried
+   * next cycle. Throws only if not a single word could be built (e.g.
+   * offline).
    */
   async function buildBlock(targetMs) {
     const gen = generation;
@@ -188,35 +203,63 @@ export function createPlayer({
       cyclePos = 0;
     }
 
-    // Kick off clip fetches for the cycle's upcoming words through a
-    // limiter: started in queue order, at most MAX_CLIP_FETCHES in flight.
-    // Once the block is full (`done`) or the build is stale, tasks still
-    // queued in the limiter reject instead of fetching.
+    // Clip fetches run through a limiter: started in queue order, at most
+    // MAX_CLIP_FETCHES in flight. Once the block is full (`done`) or the
+    // build is stale, tasks still queued in the limiter reject instead of
+    // fetching.
     let done = false;
     const limit = createLimiter(MAX_CLIP_FETCHES);
-    const jobs = queue.map((word) => {
-      const parsedClips = Promise.all(
-        clipIds(word).map((id) =>
-          limit(() => {
-            if (done || generation !== gen) throw new Error("unneeded");
-            return clipCache.get(id);
-          })
-        )
-      );
-      parsedClips.catch(() => {}); // outcome handled where the job is consumed
-      return { word, parsedClips };
-    });
+    const words = [...queue]; // this cycle's order, fixed for the build
+    const jobs = [];
+    let totalMs = 0; // actual ms of the words taken into the block
+    let aheadCount = 0; // admitted words not yet taken or failed
+
+    /** Admit upcoming words into the fetch pipeline while they can still
+     * fit in the block (#89; see the function comment). */
+    function admit() {
+      while (
+        !done &&
+        generation === gen &&
+        jobs.length < words.length &&
+        totalMs + aheadCount * MIN_WORD_MS < targetMs
+      ) {
+        const word = words[jobs.length];
+        const job = { word, released: false };
+        job.parsedClips = Promise.all(
+          clipIds(word).map((id) =>
+            limit(() => {
+              if (done || generation !== gen) throw new Error("unneeded");
+              return clipCache.get(id);
+            })
+          )
+        );
+        aheadCount += 1;
+        job.parsedClips.catch(() => release(job)); // failure slides the bound
+        jobs.push(job);
+      }
+    }
+
+    /** Drop `job`'s reservation (it was taken into the block or failed)
+     * and let the next word in, if it now fits. */
+    function release(job) {
+      if (job.released) return;
+      job.released = true;
+      aheadCount -= 1;
+      admit();
+    }
 
     const taken = [];
     const positions = [];
     const durations = new Map();
     const clips = new Map();
-    let totalMs = 0;
 
     try {
-      for (const job of jobs) {
+      for (let k = 0; ; k++) {
         if (generation !== gen) throw new Error("stale build");
         if (totalMs >= targetMs) break;
+        admit(); // the bound allows another word here (totalMs < target)
+        if (k >= jobs.length) break; // cycle queue exhausted
+        const job = jobs[k];
         queue.shift(); // == job.word: consumed for this cycle either way
         cyclePos += 1;
         let parsed;
@@ -238,6 +281,7 @@ export function createPlayer({
         for (const segment of wordSequence(job.word)) {
           totalMs += segment.type === "gap" ? segment.ms : durations.get(segment.fileId);
         }
+        release(job); // its reservation is now counted in totalMs
       }
     } finally {
       done = true; // fetches not yet started for untaken words never start
@@ -345,7 +389,7 @@ export function createPlayer({
     }
     queue = [];
     cyclePos = 0;
-    blockIndex = 0; // every session ramps up from the small first block (#82)
+    blockIndex = 0; // every session ramps up from the one-word first block (#89)
     if (mediaSession) {
       mediaSession.setActionHandler("play", resume);
       mediaSession.setActionHandler("pause", pause);
