@@ -40,6 +40,46 @@
       <button id="btn-retry" class="btn solid single" type="button">Retry</button>
     </section>
 
+    <!-- Onboarding / first run (issue #76, design/onboarding.md): shown
+         only while the sheet is created and until learning_language is
+         saved — returning users never see any of these. Driven by
+         js/onboardscreen.js; the language buttons come from languages.js. -->
+    <section id="state-onboard-setup" class="message" hidden>
+      <h3>Setting up your word list&hellip;</h3>
+      <p>Your words live in a Google Sheet in your own Drive. The app is
+        creating it for you &mdash; a few seconds.</p>
+    </section>
+
+    <section id="state-onboard-language" class="message" hidden>
+      <div class="step-cap">Step 1 of 2</div>
+      <h3>Which language are you learning?</h3>
+      <div id="ob-menu" class="menu">
+        <!-- option buttons inserted here from languages.js -->
+        <button id="ob-continue" class="btn disabled ob-continue" type="button" disabled>Continue</button>
+        <div id="ob-caption" class="btn-cap" hidden></div>
+      </div>
+    </section>
+
+    <section id="state-onboard-key" class="message" hidden>
+      <div class="step-cap">Step 2 of 2</div>
+      <h3>One more thing &mdash; AI&nbsp;features</h3>
+      <p>Importing new words and natural audio run on Google's AI. That
+        needs a free key from your Google account &mdash; the app will walk
+        you through it.</p>
+      <div class="menu">
+        <button id="ob-setup-key" class="btn solid" type="button">Set up the free key</button>
+        <button id="ob-skip-key" class="btn outline" type="button">Skip for now</button>
+        <div class="btn-cap">You can do this anytime later from Import.<br />
+          Reviewing cards works without a key.</div>
+      </div>
+    </section>
+
+    <section id="state-onboard-error" class="message" hidden>
+      <h3>Couldn't set things up</h3>
+      <p>Check your connection and try again. Nothing is lost.</p>
+      <button id="ob-retry" class="btn solid single" type="button">Retry</button>
+    </section>
+
     <!-- Home: wordmark, status line, stacked actions (design/home-screen.md) -->
     <section id="state-home" class="message" hidden>
       <h3>IV Flash Cards</h3>

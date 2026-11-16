@@ -47,9 +47,16 @@ latest deploy (issue #67).
 
 ## Configuration
 
-`site/js/config.js` holds the Google OAuth client ID and the spreadsheet ID.
-It is **not** checked in (gitignored); both values come out of the one-time
-setup below.
+`site/js/config.js` holds the Google OAuth client ID and — optionally — a
+spreadsheet ID. It is **not** checked in (gitignored); the client ID comes
+out of the one-time setup below.
+
+The spreadsheet ID is no longer required: at first sign-in the app finds or
+creates the vocabulary sheet in the signed-in user's own Drive
+([ADR-0008](docs/adr/0008-per-user-sheet-discovery-and-legacy-adoption.md)).
+Set `SPREADSHEET_ID` to `""` to use discovery. A non-empty value still skips
+discovery and uses that sheet — a temporary owner-continuity fallback (#76)
+that #77 removes together with the export.
 
 - **Local development:** copy the example and fill in your values:
 
@@ -101,7 +108,10 @@ manually, in the [Google Cloud console](https://console.cloud.google.com/):
    - The client ID shown after step 4 (ends in `.apps.googleusercontent.com`)
      goes into `CLIENT_ID` in your local `config.js` and into the
      `OAUTH_CLIENT_ID` repository secret.
-   - The spreadsheet ID — the long segment of the sheet's URL,
+   - The spreadsheet ID is optional (see [Configuration](#configuration)):
+     leave `SPREADSHEET_ID` empty (`""`) and the app creates the sheet
+     itself at first sign-in. To keep using one specific existing sheet,
+     its ID — the long segment of the sheet's URL,
      `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit` — goes
      into `SPREADSHEET_ID` in your local `config.js` and into the
      `SPREADSHEET_ID` repository secret.

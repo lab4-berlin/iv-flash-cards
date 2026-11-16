@@ -3,16 +3,21 @@
 // write-back queue into the UI designed in design/home-screen.md and
 // design/flashcard-review.md.
 //
-// States: loading → signin? → (empty | home) → reviewing → done → home;
-// Import (issue #37, importscreen.js) and Listen (issue #41,
+// States: loading → signin? → onboarding? → (empty | home) → reviewing →
+// done → home; Import (issue #37, importscreen.js) and Listen (issue #41,
 // listenscreen.js) are their own screens. Error screen on startup read
 // failure; sync banner driven by the queue.
+//
+// Startup resolves the user's sheet by discovery (ADR-0008, #76): config.js
+// keeps only the OAuth client ID. A still-configured SPREADSHEET_ID is a
+// temporary owner-continuity fallback (removed by #77).
 
-import { CLIENT_ID, SPREADSHEET_ID } from "./config.js";
+import * as config from "./config.js";
 import * as auth from "./auth.js";
 import {
   setSpreadsheetId,
   ensureHeader,
+  ensureTabs,
   loadWords,
   writeStats,
   appendWords,
@@ -20,6 +25,7 @@ import {
   writePhrase,
   writePhraseTranslation,
 } from "./sheets.js";
+import { readSettings, writeLearningLanguage } from "./settings.js";
 import {
   buildQueue,
   buildAheadQueue,
@@ -33,14 +39,14 @@ import * as speech from "./speech.js";
 import * as apikey from "./apikey.js";
 import { enrichWord, translatePhrase } from "./gemini.js";
 import { synthesize } from "./tts.js";
-import { ensureFolder, uploadClip, fetchClip } from "./drive.js";
+import { ensureFolder, uploadClip, fetchClip, ensureSpreadsheet } from "./drive.js";
 import { createImporter } from "./importer.js";
 import { initImportScreen } from "./importscreen.js";
 import { createPlayer } from "./player.js";
 import { initListenScreen } from "./listenscreen.js";
 import { createClipPlayer, cardClipIds } from "./clipplayer.js";
-
-setSpreadsheetId(SPREADSHEET_ID); // injected, no longer imported by sheets.js (ADR-0008, #75)
+import { nextStep } from "./onboardflow.js";
+import { initOnboardScreen } from "./onboardscreen.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -99,6 +105,10 @@ const MESSAGE_STATES = [
   "state-empty",
   "state-done",
   "state-import",
+  "state-onboard-setup",
+  "state-onboard-language",
+  "state-onboard-key",
+  "state-onboard-error",
 ];
 
 const FADE_MS = 150;
@@ -337,33 +347,37 @@ const importer = createImporter({
   translatePhrase: (phrase) => translatePhrase(apikey.getKey(), phrase),
 });
 
-const importScreen = initImportScreen({
-  importer,
-  getVocabulary: () => words.map((w) => w.word),
-  getWords: () => words,
-  reloadWords: async () => {
-    words = await loadWords(await freshToken());
-    return words;
-  },
-  fetchClip: async (fileId) => fetchClip(await freshToken(), fileId),
-  apiKey: apikey,
-  sheetUrl: `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}`,
-  // Leaving import lands wherever makes sense with the (reloaded) words.
-  onExit: () => (words.length === 0 ? showState("state-empty") : showHome()),
-  // The import screen may borrow the sync banner for failed sheet appends
-  // (design/word-import.md); null restores the write-queue's own display.
-  setBanner: (text) => {
-    if (text) {
-      els.banner.textContent = text;
-      els.banner.hidden = false;
-    } else {
-      els.banner.textContent = "Couldn't save progress \u2014 retrying";
-      els.banner.hidden = writeQueue.pendingCount() === 0;
-    }
-  },
-});
+// Created lazily on first open: its "Open sheet" link needs the sheet URL,
+// which exists only after startup resolution (discovery, ADR-0008) — and
+// Import is only reachable from Home/empty, well past that point.
+let importScreen = null;
 
 function openImport() {
+  importScreen ??= initImportScreen({
+    importer,
+    getVocabulary: () => words.map((w) => w.word),
+    getWords: () => words,
+    reloadWords: async () => {
+      words = await loadWords(await freshToken());
+      return words;
+    },
+    fetchClip: async (fileId) => fetchClip(await freshToken(), fileId),
+    apiKey: apikey,
+    sheetUrl,
+    // Leaving import lands wherever makes sense with the (reloaded) words.
+    onExit: () => (words.length === 0 ? showState("state-empty") : showHome()),
+    // The import screen may borrow the sync banner for failed sheet appends
+    // (design/word-import.md); null restores the write-queue's own display.
+    setBanner: (text) => {
+      if (text) {
+        els.banner.textContent = text;
+        els.banner.hidden = false;
+      } else {
+        els.banner.textContent = "Couldn't save progress \u2014 retrying";
+        els.banner.hidden = writeQueue.pendingCount() === 0;
+      }
+    },
+  });
   showState("state-import");
   importScreen.open();
 }
@@ -501,10 +515,32 @@ function advanceChoice() {
 }
 
 // -------------------------------------------------------------------- startup
+//
+// After auth, `begin` resolves which spreadsheet this account uses
+// (ADR-0008): discovery via ensureSpreadsheet, or — temporary fallback,
+// removed by #77 — a still-configured SPREADSHEET_ID. Then onboardflow's
+// resume rules route the visit: a returning user (learning_language set)
+// goes straight to Home with zero new screens; a first run walks
+// design/onboarding.md's two steps.
 
 // The header check runs once per app load (issue #56): a brand-new blank
-// sheet gets its header row written before the first read.
+// sheet gets its header row written before the first read. ensureTabs
+// covers it on the discovery path.
 let headerEnsured = false;
+
+// Whether discovery found the sheet at the start of this visit (false =
+// the app created it this visit) — the session constant onboardflow's
+// resume rules key on.
+let sheetExisted = true;
+
+// "Open sheet" targets, known once the sheet is resolved.
+let sheetUrl = "";
+
+function applySheetId(id) {
+  setSpreadsheetId(id);
+  sheetUrl = `https://docs.google.com/spreadsheets/d/${id}`;
+  els.linkSheet.href = sheetUrl;
+}
 
 /** Load the sheet and land on Home (or the empty/signin/error states). */
 async function loadAndBegin() {
@@ -536,10 +572,101 @@ async function loadAndBegin() {
   showHome();
 }
 
+/**
+ * Route to the onboarding step (or Home) that nextStep decided. A
+ * "settingUp" result here means the sheet was just created — that screen
+ * already showed while creation ran — so the language step is next either
+ * way.
+ */
+function route(step) {
+  if (step === "home") {
+    void loadAndBegin();
+  } else if (step === "keyOffer") {
+    onboard.showKeyOffer();
+  } else {
+    onboard.showLanguage();
+  }
+}
+
+/** Resolve the sheet, read settings, and route the visit. */
+async function begin() {
+  showState("state-loading");
+
+  // Temporary owner-continuity fallback (removed by #77): a configured ID
+  // skips discovery — and onboarding — entirely: the pre-V3 startup.
+  if (config.SPREADSHEET_ID) {
+    applySheetId(config.SPREADSHEET_ID);
+    await loadAndBegin();
+    return;
+  }
+
+  let settings;
+  try {
+    const token = auth.getToken();
+    const id = await ensureSpreadsheet(token, {
+      // Shown only when discovery found nothing and creation actually
+      // runs; a found sheet skips straight past it (design/onboarding.md).
+      onCreate: () => {
+        sheetExisted = false;
+        onboard.showSettingUp();
+      },
+    });
+    applySheetId(id);
+    await ensureTabs(token);
+    headerEnsured = true; // ensureTabs starts with the Words header
+    settings = await readSettings(token);
+  } catch (error) {
+    if (error?.status === 401) {
+      els.signinHint.textContent = "Your session expired — sign in again.";
+      showState("state-signin");
+    } else {
+      // Retry re-runs the whole resolution: find-or-create and ensureTabs
+      // are idempotent, so this never duplicates anything (ADR-0008).
+      onboard.showError(() => void begin());
+    }
+    return;
+  }
+
+  route(
+    nextStep({
+      sheetExisted,
+      learningLanguage: settings.learning_language || null,
+      hasKey: apikey.getKey() != null,
+    }),
+  );
+}
+
+/** Continue tapped: write learning_language, then key offer or Home. */
+async function saveLanguage(code) {
+  onboard.setSaving(true);
+  try {
+    await writeLearningLanguage(await freshToken(), code);
+  } catch (error) {
+    onboard.setSaving(false);
+    if (error?.status === 401) {
+      els.signinHint.textContent = "Your session expired — sign in again.";
+      showState("state-signin");
+    } else {
+      // Retry re-runs only the failed write (spec: "retry re-runs only
+      // the failed step") — the upsert is safe to repeat.
+      onboard.showError(() => void saveLanguage(code));
+    }
+    return;
+  }
+  onboard.setSaving(false);
+  route(nextStep({ sheetExisted, learningLanguage: code, hasKey: apikey.getKey() != null }));
+}
+
+const onboard = initOnboardScreen({
+  showScreen: showState,
+  onContinue: (code) => void saveLanguage(code),
+  onDone: () => void loadAndBegin(), // key set up or skipped → Home
+});
+
 async function start() {
   showState("state-loading");
   try {
-    await auth.init(CLIENT_ID);
+    await auth.init(config.CLIENT_ID);
   } catch {
     showState("state-error");
     return;
@@ -552,7 +679,7 @@ async function start() {
       return;
     }
   }
-  await loadAndBegin();
+  await begin();
 }
 
 // --------------------------------------------------------------------- audio
@@ -645,7 +772,7 @@ updateSpeakers();
 
 // --------------------------------------------------------------------- wiring
 
-els.linkSheet.href = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}`;
+// The "Open sheet" link gets its href in applySheetId, after resolution.
 
 els.card.addEventListener("click", () => {
   if (session?.mode === "choices") {
@@ -662,7 +789,9 @@ els.btnNext.addEventListener("click", () => advanceChoice());
 
 els.btnWrong.addEventListener("click", () => onGrade(false));
 els.btnRight.addEventListener("click", () => onGrade(true));
-els.btnRetry.addEventListener("click", () => loadAndBegin());
+// Retry re-reads the resolved sheet; before resolution (auth.init failed)
+// it restarts from the top.
+els.btnRetry.addEventListener("click", () => (sheetUrl ? loadAndBegin() : start()));
 els.btnDone.addEventListener("click", () => loadAndBegin()); // refetch, lands Home
 
 // Home navigation (issue #42). ✕ abandons the current card ungraded; words
@@ -677,7 +806,7 @@ els.btnImportEmpty.addEventListener("click", () => openImport());
 els.btnSignin.addEventListener("click", async () => {
   try {
     await auth.requestToken(); // interactive popup — needs the user gesture
-    await loadAndBegin();
+    await begin(); // resolution + routing: a first sign-in starts onboarding
   } catch {
     els.signinHint.textContent = "Sign-in failed — try again.";
   }

@@ -126,11 +126,17 @@ export function resetSpreadsheetCache() {
  *
  * The ID is cached in module memory for the session; nothing is persisted.
  *
+ * `onCreate` fires right before creation runs — i.e. only when discovery
+ * found nothing. The onboarding flow (#76) uses it to show the "Setting
+ * up" screen exactly when the design wants it: never for a sheet that was
+ * merely found.
+ *
  * @param {string} token OAuth access token (`drive.file` + `spreadsheets`)
+ * @param {{ onCreate?: () => void }} [options]
  * @returns {Promise<string>} the spreadsheet's Drive file ID
  * @throws {DriveAuthError} on 401, {DriveError} on other API failures
  */
-export async function ensureSpreadsheet(token) {
+export async function ensureSpreadsheet(token, { onCreate } = {}) {
   if (cachedSpreadsheetId) return cachedSpreadsheetId;
 
   const params = new URLSearchParams({
@@ -149,6 +155,7 @@ export async function ensureSpreadsheet(token) {
     return cachedSpreadsheetId;
   }
 
+  onCreate?.();
   const created = await driveFetch(
     token,
     `${FILES_API}?fields=id`,

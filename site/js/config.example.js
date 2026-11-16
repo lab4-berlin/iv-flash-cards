@@ -12,5 +12,9 @@
 // Google OAuth client ID (Google Identity Services, token client).
 export const CLIENT_ID = "REPLACE_WITH_OAUTH_CLIENT_ID";
 
-// ID of the Google Sheet holding the `Words` worksheet.
+// ID of the Google Sheet holding the `Words` worksheet. Since ADR-0008 the
+// app discovers — or creates — the sheet in the signed-in user's own Drive,
+// so this is OPTIONAL: set it to "" (empty) to use discovery. A non-empty
+// value skips discovery and uses the configured sheet — a temporary
+// owner-continuity fallback (#76) that #77 removes along with this export.
 export const SPREADSHEET_ID = "REPLACE_WITH_SPREADSHEET_ID";
