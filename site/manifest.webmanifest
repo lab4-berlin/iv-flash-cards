@@ -1,8 +1,8 @@
 {
   "name": "IV Flash Cards",
   "short_name": "FlashCards",
-  "start_url": "/iv-flash-cards/",
-  "scope": "/iv-flash-cards/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#FFFFFF",
   "theme_color": "#FFFFFF",

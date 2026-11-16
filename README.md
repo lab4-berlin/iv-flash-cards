@@ -36,8 +36,9 @@ tests on every push; on push to `main` it also deploys `site/` to GitHub Pages.
 The site ships a web app manifest ([site/manifest.webmanifest](site/manifest.webmanifest))
 and icons (`site/icons/`), so Chrome on Android offers a real "Install" and
 iOS Safari's "Add to Home Screen" gets a proper icon and title. `start_url`
-and `scope` are `/iv-flash-cards/` — the GitHub Pages subpath — so keep them
-in sync if the repo name or hosting path ever changes.
+and `scope` are `/` — the site lives at the root of the custom domain
+`https://flash-cards.lab4.berlin` — so keep them in sync if the hosting path
+ever changes.
 
 There is deliberately **no service worker**: current Chrome installs from the
 manifest alone, and a caching worker would make deploys fight the cache. The
@@ -92,7 +93,7 @@ manually, in the [Google Cloud console](https://console.cloud.google.com/):
    credentials → OAuth client ID**:
    - Application type: **Web application**.
    - Authorized JavaScript origins:
-     - `https://lab4-berlin.github.io` (the GitHub Pages origin)
+     - `https://flash-cards.lab4.berlin` (the production origin)
      - `http://localhost:8000` (local development)
    - No authorized redirect URIs are needed (the GIS token client uses a
      popup, not redirects).
@@ -151,7 +152,7 @@ restrictions make a leaked key useless anywhere but this app. In the
 pick the project from step 1, open the key under **API keys**, and set:
 
 - **Application restrictions → Websites** (HTTP referrers), allowing exactly:
-  - `https://lab4-berlin.github.io/*`
+  - `https://flash-cards.lab4.berlin/*`
   - `http://localhost:8000/*`
 - **API restrictions → Restrict key**, selecting only the
   **Generative Language API**.
