@@ -8,6 +8,8 @@
 // Free-tier rate limits are real: callers (the import pipeline, backfill)
 // must catch `RateLimitError` and back off rather than fire in parallel.
 
+import { byCode } from "./languages.js";
+
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 /** Gemini TTS model (exported so a GA successor is a one-line swap). */
@@ -15,11 +17,6 @@ export const TTS_MODEL = "gemini-3.8-flash-tts";
 
 /** Sample rate of the PCM audio Gemini TTS returns. */
 export const SAMPLE_RATE = 24000;
-
-// BCP-47 codes for speechConfig.languageCode — steers pronunciation without
-// putting instructions into the spoken text (the 3.8 TTS model reads any
-// instruction text aloud, verbatim).
-const LANGUAGE_CODES = { es: "es-ES", en: "en-US" };
 
 /** Any non-OK TTS API response. `status` is the HTTP status code. */
 export class TtsError extends Error {
@@ -43,8 +40,9 @@ export class RateLimitError extends TtsError {
  *
  * @param {string} key user-supplied Gemini API key (ADR-0004)
  * @param {string} text what to say
- * @param {"es"|"en"} language language of `text` (steers pronunciation —
- *   the voices themselves are multilingual, ADR-0004)
+ * @param {string} language language code of `text` per languages.js, e.g.
+ *   "es"/"fr"/"en" (steers pronunciation — the voices themselves are
+ *   multilingual, ADR-0004); an unknown code is passed through as-is
  * @param {string} voice a Gemini voice name, normally from voices.js
  * @returns {Promise<Blob>} an `audio/wav` blob (24 kHz, 16-bit, mono)
  * @throws {RateLimitError} on 429, {TtsError} on other API failures
@@ -61,8 +59,11 @@ export async function synthesize(key, text, language, voice) {
       contents: [{ parts: [{ text }] }],
       generationConfig: {
         responseModalities: ["AUDIO"],
+        // The BCP-47 code steers pronunciation without putting instructions
+        // into the spoken text (the 3.8 TTS model reads any instruction
+        // text aloud, verbatim). Codes come from languages.js (#78).
         speechConfig: {
-          languageCode: LANGUAGE_CODES[language] ?? language,
+          languageCode: byCode(language)?.ttsCode ?? language,
           voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
         },
       },

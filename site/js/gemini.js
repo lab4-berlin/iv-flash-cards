@@ -1,14 +1,25 @@
 // Gemini text enrichment for one word (issue #34, ADR-0004).
-// Given a new Spanish word and the current vocabulary, asks a Gemini flash
-// model for an English translation, a simple (A2-level) Spanish example
-// phrase that contains the word and prefers in-vocabulary words, and the
-// English translation of that phrase.
+// Given a new target-language word and the current vocabulary, asks a
+// Gemini flash model for an English translation, a simple (A2-level)
+// example phrase in the learning language that contains the word and
+// prefers in-vocabulary words, and the English translation of that phrase.
+// Prompts are parameterized by the active language code (#65/#78);
+// translations stay English app-wide. The wire keys `phrase_es`/`phrase_en`
+// keep their historical names — like the `audio_*_es` sheet columns, they
+// mean "target language"/"English" (architecture.md §V3).
 //
 // `buildPrompt` and `parseEnrichment` are pure (unit-tested); `enrichWord`
 // is the thin fetch glue. The API key is user-supplied and passed in by the
 // caller (issue #33's module owns storage) — it never lives in this module.
 
+import { byCode } from "./languages.js";
+
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+
+/** English name of a language for prompt text, e.g. "es" → "Spanish". */
+function languageName(code) {
+  return byCode(code)?.name ?? code;
+}
 
 /** Gemini flash model used for text enrichment (ADR-0004). */
 export const MODEL = "gemini-3.8-flash";
@@ -53,27 +64,29 @@ const RESPONSE_SCHEMA = {
 
 /**
  * Build the enrichment prompt for one word (pure).
- * @param {string} word the new Spanish word
+ * @param {string} word the new target-language word
  * @param {string[]} vocabulary current words column from the sheet; the
  *   model is told to prefer these in the example phrase
+ * @param {string} [language] active language code (languages.js), default "es"
  * @returns {string} prompt text
  */
-export function buildPrompt(word, vocabulary) {
+export function buildPrompt(word, vocabulary, language = "es") {
+  const name = languageName(language);
   const known = vocabulary.filter((w) => w && w.trim() !== "");
   const lines = [
-    "You are helping a learner of Spanish build vocabulary flashcards.",
-    `The new Spanish word is: "${word}".`,
+    `You are helping a learner of ${name} build vocabulary flashcards.`,
+    `The new ${name} word is: "${word}".`,
     "",
     "Produce:",
     `1. "translation": the English translation of "${word}".`,
-    `2. "phrase_es": one short, simple (A2-level) Spanish example phrase` +
+    `2. "phrase_es": one short, simple (A2-level) ${name} example phrase` +
       ` that MUST contain the word "${word}".`,
     `3. "phrase_en": the English translation of that phrase.`,
   ];
   if (known.length > 0) {
     lines.push(
       "",
-      "The learner already knows these Spanish words. Where it is natural," +
+      `The learner already knows these ${name} words. Where it is natural,` +
         " prefer them over other words in the example phrase; otherwise keep" +
         " the phrase simple:",
       known.join(", "),
@@ -162,16 +175,17 @@ async function generate(key, prompt, schema, label) {
 /**
  * Enrich one word via Gemini `generateContent` with structured JSON output.
  * @param {string} key user-supplied Gemini API key (ADR-0004)
- * @param {string} word the new Spanish word
+ * @param {string} word the new target-language word
  * @param {string[]} vocabulary current words column from the sheet
+ * @param {string} [language] active language code (languages.js), default "es"
  * @returns {Promise<{translation: string, phraseEs: string, phraseEn: string}>}
  * @throws {RateLimitError} on 429, {GeminiError} on other API failures,
  *   {EnrichmentParseError} when the model output has the wrong shape
  */
-export async function enrichWord(key, word, vocabulary) {
+export async function enrichWord(key, word, vocabulary, language = "es") {
   const text = await generate(
     key,
-    buildPrompt(word, vocabulary),
+    buildPrompt(word, vocabulary, language),
     RESPONSE_SCHEMA,
     `word "${word}"`,
   );
@@ -189,16 +203,18 @@ const TRANSLATE_SCHEMA = {
 };
 
 /**
- * Build the prompt translating one existing Spanish phrase (pure).
+ * Build the prompt translating one existing target-language phrase (pure).
  * Unlike {@link buildPrompt} this must not invent a new phrase — the user
  * wrote this one, the backfill only fills in its English translation.
- * @param {string} phrase the Spanish example phrase from the sheet
+ * @param {string} phrase the example phrase from the sheet
+ * @param {string} [language] active language code (languages.js), default "es"
  * @returns {string} prompt text
  */
-export function buildTranslatePrompt(phrase) {
+export function buildTranslatePrompt(phrase, language = "es") {
+  const name = languageName(language);
   return [
-    "You are helping a learner of Spanish build vocabulary flashcards.",
-    `Translate this Spanish phrase into natural, simple English: "${phrase}".`,
+    `You are helping a learner of ${name} build vocabulary flashcards.`,
+    `Translate this ${name} phrase into natural, simple English: "${phrase}".`,
     "",
     'Respond with a single JSON object with exactly the key "phrase_en",' +
       " a string.",
@@ -230,18 +246,19 @@ export function parseTranslation(responseText) {
 }
 
 /**
- * Translate one existing Spanish phrase via Gemini — the backfill (#72)
- * uses this for rows that already have a phrase (C) but no translation (D).
+ * Translate one existing phrase via Gemini — the backfill (#72) uses this
+ * for rows that already have a phrase (C) but no translation (D).
  * @param {string} key user-supplied Gemini API key (ADR-0004)
- * @param {string} phrase the Spanish example phrase
+ * @param {string} phrase the target-language example phrase
+ * @param {string} [language] active language code (languages.js), default "es"
  * @returns {Promise<string>} the English translation
  * @throws {RateLimitError} on 429, {GeminiError} on other API failures,
  *   {EnrichmentParseError} when the model output has the wrong shape
  */
-export async function translatePhrase(key, phrase) {
+export async function translatePhrase(key, phrase, language = "es") {
   const text = await generate(
     key,
-    buildTranslatePrompt(phrase),
+    buildTranslatePrompt(phrase, language),
     TRANSLATE_SCHEMA,
     `phrase "${phrase}"`,
   );

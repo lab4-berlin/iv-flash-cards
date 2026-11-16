@@ -631,6 +631,107 @@ describe("generateMissingClips", () => {
   });
 });
 
+// -------------------------------------------- language parameterization (#78)
+
+describe("language parameterization (#78)", () => {
+  /** stubImporter wired for French, recording the language enrich sees. */
+  function frenchImporter(overrides = {}) {
+    const languages = { enriched: [], translated: [] };
+    const { importer, log } = stubImporter({
+      language: () => "fr",
+      enrich: async (word, vocabulary, language) => {
+        languages.enriched.push(language);
+        return enrichmentFor(word);
+      },
+      translatePhrase: async (phrase, language) => {
+        languages.translated.push(language);
+        return `EN: ${phrase}`;
+      },
+      ...overrides,
+    });
+    return { importer, log, languages };
+  }
+
+  test("run: active code lands in column F and in the enrichment call", async () => {
+    const { importer, log, languages } = frenchImporter();
+    const { items } = await importer.run("chien", []);
+    assert.equal(items[0].state, "done");
+    assert.equal(log.appended[0].language, "fr");
+    assert.deepEqual(languages.enriched, ["fr"]);
+  });
+
+  test("run: target-language clips speak the active code, translations stay English", async () => {
+    const { importer, log } = frenchImporter();
+    await importer.run("chien", []);
+    assert.deepEqual(
+      log.synthesized.map((s) => [s.text, s.language]),
+      [
+        ["chien", "fr"],
+        ["Frase con chien.", "fr"],
+        ["chien-en", "en"],
+        ["Phrase with chien.", "en"],
+      ],
+    );
+    // The clip filenames keep their historical _es kind names (§V3).
+    assert.deepEqual(
+      log.uploaded.map((u) => u.filename),
+      [
+        "10-chien-word_es.wav",
+        "10-chien-phrase_es.wav",
+        "10-chien-word_en.wav",
+        "10-chien-phrase_en.wav",
+      ],
+    );
+  });
+
+  test("backfill: enrichment and phrase translation get the active code", async () => {
+    const { importer, languages } = frenchImporter();
+    await importer.backfill([
+      makeWord({ word: "table", example: null, audioPhraseEs: null, rowIndex: 3 }),
+      makeWord({ word: "chaise", phraseTranslation: null, audioPhraseEn: null, rowIndex: 4 }),
+    ]);
+    assert.deepEqual(languages.enriched, ["fr"]); // the generated phrase
+    assert.deepEqual(languages.translated, ["fr"]); // the existing phrase
+  });
+
+  test("generateMissingClips: word/phrase clips in the active language", async () => {
+    const { importer, log } = frenchImporter();
+    const { failures } = await importer.generateMissingClips(
+      makeWord({
+        word: "chaise",
+        translation: "chair",
+        example: "La chaise est rouge.",
+        phraseTranslation: "The chair is red.",
+        audioWordEs: null,
+        audioPhraseEs: null,
+        audioWordEn: null,
+        audioPhraseEn: null,
+        rowIndex: 6,
+      }),
+    );
+    assert.deepEqual(failures, []);
+    assert.deepEqual(
+      log.synthesized.map((s) => [s.text, s.language]),
+      [
+        ["chaise", "fr"],
+        ["La chaise est rouge.", "fr"],
+        ["chair", "en"],
+        ["The chair is red.", "en"],
+      ],
+    );
+  });
+
+  test("without a language dep everything defaults to es (pre-#78 behavior)", async () => {
+    const { importer, log } = stubImporter();
+    await importer.run("perro", []);
+    assert.equal(log.appended[0].language, "es");
+    assert.deepEqual(
+      log.synthesized.map((s) => s.language),
+      ["es", "es", "en", "en"],
+    );
+  });
+});
+
 // ------------------------------------------------------------ backfill (#72)
 
 /** A sheet Word with sensible complete-row defaults. */

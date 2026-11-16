@@ -41,6 +41,33 @@ describe("buildPrompt", () => {
       assert.doesNotMatch(prompt, /already knows/);
     }
   });
+
+  // ------------------------------------- language parameterization (#78)
+
+  test("defaults to Spanish when no language is given", () => {
+    const prompt = buildPrompt("perro", ["gato"]);
+    assert.match(prompt, /learner of Spanish/);
+    assert.match(prompt, /new Spanish word/);
+    assert.match(prompt, /Spanish example phrase/);
+  });
+
+  test("names the active language throughout; translations stay English", () => {
+    const prompt = buildPrompt("chien", ["chat"], "fr");
+    assert.match(prompt, /learner of French/);
+    assert.match(prompt, /new French word/);
+    assert.match(prompt, /French example phrase/);
+    assert.match(prompt, /these French words/);
+    assert.doesNotMatch(prompt, /Spanish/);
+    // The wire keys keep their historical names (architecture.md §V3) and
+    // the translations are still asked for in English.
+    assert.match(prompt, /"phrase_es"/);
+    assert.match(prompt, /English translation of "chien"/);
+    assert.match(prompt, /"phrase_en": the English translation/);
+  });
+
+  test("an unknown language code is used verbatim, never crashes", () => {
+    assert.match(buildPrompt("slovo", [], "xx"), /learner of xx/);
+  });
 });
 
 describe("parseEnrichment", () => {
@@ -158,6 +185,22 @@ describe("enrichWord", () => {
     assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingBudget: 0 });
   });
 
+  test("passes the language through to the prompt (#78)", async () => {
+    const calls = stubFetch(
+      geminiResponse({
+        translation: "dog",
+        phrase_es: "Le chien mange.",
+        phrase_en: "The dog eats.",
+      }),
+    );
+    await enrichWord("k", "chien", ["chat"], "fr");
+    const body = JSON.parse(calls[0].options.body);
+    assert.equal(
+      body.contents[0].parts[0].text,
+      buildPrompt("chien", ["chat"], "fr"),
+    );
+  });
+
   test("429 surfaces as RateLimitError", async () => {
     stubFetch(new Response("quota", { status: 429 }));
     await assert.rejects(
@@ -205,6 +248,14 @@ describe("buildTranslatePrompt", () => {
     // The backfill must not invent a new phrase for an existing row.
     assert.doesNotMatch(prompt, /"phrase_es"/);
     assert.doesNotMatch(prompt, /"translation"/);
+  });
+
+  test("defaults to Spanish; names the active language otherwise (#78)", () => {
+    assert.match(buildTranslatePrompt("La mesa es grande."), /Spanish phrase/);
+    const fr = buildTranslatePrompt("La table est grande.", "fr");
+    assert.match(fr, /learner of French/);
+    assert.match(fr, /French phrase into natural, simple English/);
+    assert.doesNotMatch(fr, /Spanish/);
   });
 });
 
@@ -275,6 +326,29 @@ describe("translatePhrase", () => {
     );
     assert.deepEqual(body.generationConfig.responseSchema.required, ["phrase_en"]);
     assert.deepEqual(body.generationConfig.thinkingConfig, { thinkingBudget: 0 });
+  });
+
+  test("passes the language through to the translate prompt (#78)", async () => {
+    const calls = stubFetch(
+      new Response(
+        JSON.stringify({
+          candidates: [
+            {
+              content: {
+                parts: [{ text: JSON.stringify({ phrase_en: "The table is big." }) }],
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+    await translatePhrase("k", "La table est grande.", "fr");
+    const body = JSON.parse(calls[0].options.body);
+    assert.equal(
+      body.contents[0].parts[0].text,
+      buildTranslatePrompt("La table est grande.", "fr"),
+    );
   });
 
   test("429 surfaces as RateLimitError (the backfill backs off on these)", async () => {

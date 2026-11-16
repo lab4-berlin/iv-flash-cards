@@ -1,7 +1,13 @@
-import { test } from "node:test";
+import { test, describe, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
-import { pcmToWav, SAMPLE_RATE, RateLimitError, TtsError } from "../site/js/tts.js";
+import {
+  synthesize,
+  pcmToWav,
+  SAMPLE_RATE,
+  RateLimitError,
+  TtsError,
+} from "../site/js/tts.js";
 
 const ascii = (bytes, offset, length) =>
   String.fromCharCode(...bytes.slice(offset, offset + length));
@@ -50,4 +56,50 @@ test("RateLimitError is a TtsError with status 429", () => {
   assert.ok(err instanceof TtsError);
   assert.equal(err.status, 429);
   assert.equal(err.name, "RateLimitError");
+});
+
+// ------------------------------- language codes from languages.js (#78)
+
+describe("synthesize speechConfig.languageCode", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  // A minimal valid response: inlineData carrying a tiny WAV ("RIFF"
+  // header), so synthesize returns it without PCM wrapping.
+  function stubFetch() {
+    const calls = [];
+    const wav = Buffer.from("RIFFxxxxWAVE").toString("base64");
+    globalThis.fetch = async (url, options) => {
+      calls.push({ url, options });
+      return new Response(
+        JSON.stringify({
+          candidates: [
+            { content: { parts: [{ inlineData: { data: wav } }] } },
+          ],
+        }),
+        { status: 200 },
+      );
+    };
+    return calls;
+  }
+
+  async function sentLanguageCode(language) {
+    const calls = stubFetch();
+    await synthesize("key", "bonjour", language, "Puck");
+    return JSON.parse(calls[0].options.body).generationConfig.speechConfig
+      .languageCode;
+  }
+
+  test("maps codes via languages.js ttsCode", async () => {
+    assert.equal(await sentLanguageCode("es"), "es-ES");
+    assert.equal(await sentLanguageCode("fr"), "fr-FR");
+    assert.equal(await sentLanguageCode("de"), "de-DE");
+    assert.equal(await sentLanguageCode("en"), "en-US");
+  });
+
+  test("an unknown code is passed through as-is", async () => {
+    assert.equal(await sentLanguageCode("fr-CA"), "fr-CA");
+  });
 });
