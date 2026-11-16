@@ -211,4 +211,32 @@ describe("ensureSpreadsheet (ADR-0008 discovery)", () => {
 
     await assert.rejects(ensureSpreadsheet("expired"), DriveAuthError);
   });
+
+  // The onboarding "Setting up" screen must appear only when creation
+  // actually runs (#76): onCreate is the signal.
+
+  test("onCreate fires before creation when discovery finds nothing", async () => {
+    const events = [];
+    stubFetch(
+      json({ files: [] }),
+      json({ id: "fresh-sheet" }),
+      json({}), // the rename batchUpdate
+    );
+
+    const id = await ensureSpreadsheet("tok", {
+      onCreate: () => events.push("create"),
+    });
+
+    assert.equal(id, "fresh-sheet");
+    assert.deepEqual(events, ["create"]);
+  });
+
+  test("onCreate never fires for a sheet that was merely found", async () => {
+    const events = [];
+    stubFetch(json({ files: [{ id: "s1" }] }));
+
+    await ensureSpreadsheet("tok", { onCreate: () => events.push("create") });
+
+    assert.deepEqual(events, []);
+  });
 });

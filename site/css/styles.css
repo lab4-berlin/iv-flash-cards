@@ -415,6 +415,22 @@ button {
   display: none; /* web only — see media query */
 }
 
+/* ---- onboarding (issue #76, design/onboarding.md) ---- */
+
+/* "STEP 1 OF 2" caption above the heading (mockup metrics). */
+.step-cap {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Continue sits a touch apart from the option list (mockup). */
+.ob-continue {
+  margin-top: 8px;
+}
+
 /* ---- import screen (issue #37, design/word-import.md) ---- */
 
 /* A full column in the stage, not a centered message. */

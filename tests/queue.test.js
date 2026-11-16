@@ -9,6 +9,7 @@ import {
   deserialize,
   createWriteQueue,
 } from "../site/js/queue.js";
+import { setSpreadsheetId, writeStats } from "../site/js/sheets.js";
 
 function entryFor(rowIndex, overrides = {}) {
   return {
@@ -208,6 +209,41 @@ test("a later successful write for a row supersedes its queued entry", async () 
   await queue.recordGrade(entryFor(2, { timesShown: 9 }));
   assert.equal(queue.pendingCount(), 0);
   assert.equal(storage.getItem(STORAGE_KEY), null);
+});
+
+test("no queue write can reach the network before setSpreadsheetId (#76)", async () => {
+  // app.js wires the queue through sheets.writeStats; startup injects the
+  // discovered ID before the first flush. If anything (e.g. the retry
+  // timer) fired earlier, the write must fail in sheets.js before any
+  // fetch — never land on a wrong or stale spreadsheet.
+  setSpreadsheetId(null);
+  const realFetch = globalThis.fetch;
+  let fetches = 0;
+  globalThis.fetch = async () => {
+    fetches += 1;
+    return new Response("{}", { status: 200 });
+  };
+  try {
+    const storage = fakeStorage({ [STORAGE_KEY]: serialize([entryFor(2)]) });
+    const { queue } = queueWith({
+      storage,
+      writeStats: (entry) => writeStats("tok", entry), // the real app wiring
+    });
+
+    await queue.flush();
+
+    assert.equal(fetches, 0); // failed before any network call
+    assert.equal(queue.pendingCount(), 1); // the entry survives for later
+
+    // Once the ID is injected, the same queue drains normally.
+    setSpreadsheetId("resolved-sheet");
+    await queue.flush();
+    assert.equal(fetches, 1);
+    assert.equal(queue.pendingCount(), 0);
+  } finally {
+    globalThis.fetch = realFetch;
+    setSpreadsheetId(null);
+  }
 });
 
 test("onStatusChange fires immediately and on every change", async () => {
