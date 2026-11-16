@@ -1033,9 +1033,13 @@ button {
 
 /* ---- message states ---- */
 
+/* Full width so .menu spans the screen minus the 16px stage padding on
+   mobile (#97, design/home-screen.md) — without width:100% the block
+   shrink-wraps to its widest text line and the menu inherits that. The
+   360px text cap is web-only (media query below), like the mockup. */
 .message {
   text-align: center;
-  max-width: 360px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1116,6 +1120,10 @@ button {
 
   .phrase {
     font-size: 19px;
+  }
+
+  .message {
+    max-width: 360px;
   }
 
   .menu {
