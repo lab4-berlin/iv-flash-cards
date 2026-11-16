@@ -7,8 +7,8 @@
 //      word. Dependencies are injected so the module stays unit-testable
 //      and does not hard-couple to sheets.js/gemini.js/tts.js/drive.js
 //      (app.js wires those in, binding the API key and OAuth token):
-//        - enrich(word, vocabulary): Gemini text enrichment, e.g.
-//          (w, v) => gemini.enrichWord(key, w, v)
+//        - enrich(word, vocabulary, language): Gemini text enrichment, e.g.
+//          (w, v, l) => gemini.enrichWord(key, w, v, l)
 //        - appendWord(word): append one A:P row, resolve with the 1-based
 //          row index it landed on (sheets.appendWords)
 //        - writeAudioRefs(word): write the word's M:P audio-ref cells
@@ -16,9 +16,12 @@
 //        - uploadClip(filename, blob): Drive upload, resolves with file ID
 //        - writePhrase(word): write the word's C phrase cell (backfill)
 //        - writePhraseTranslation(word): write the word's D cell (backfill)
-//        - translatePhrase(phrase): Gemini translation of one existing
-//          phrase (backfill rows with C filled but D empty), e.g.
-//          (p) => gemini.translatePhrase(key, p)
+//        - translatePhrase(phrase, language): Gemini translation of one
+//          existing phrase (backfill rows with C filled but D empty), e.g.
+//          (p, l) => gemini.translatePhrase(key, p, l)
+//        - language(): the active learning-language code (#65/#78), e.g.
+//          () => learningLanguage — written to column F of appended rows
+//          and passed to enrichment and the target-language clips
 //
 // Words are processed sequentially — free-tier rate limits, not throughput,
 // are the constraint (ADR-0004). Within one word, the 4 TTS calls run in
@@ -172,12 +175,15 @@ export async function withBackoff(fn, sleep) {
 }
 
 // The four audio clips per word: which Word field holds the Drive file ID,
-// which field holds the text to say, and in which language (ADR-0005).
+// which field holds the text to say, and whether it is spoken in the
+// target language (the active code at run time) or in English (ADR-0005).
+// The `_es` kinds keep their historical names — like the `audio_*_es`
+// sheet columns, they mean "target language" (architecture.md §V3).
 const CLIPS = [
-  { kind: "word_es", field: "audioWordEs", textField: "word", language: "es" },
-  { kind: "phrase_es", field: "audioPhraseEs", textField: "example", language: "es" },
-  { kind: "word_en", field: "audioWordEn", textField: "translation", language: "en" },
-  { kind: "phrase_en", field: "audioPhraseEn", textField: "phraseTranslation", language: "en" },
+  { kind: "word_es", field: "audioWordEs", textField: "word", target: true },
+  { kind: "phrase_es", field: "audioPhraseEs", textField: "example", target: true },
+  { kind: "word_en", field: "audioWordEn", textField: "translation", target: false },
+  { kind: "phrase_en", field: "audioPhraseEn", textField: "phraseTranslation", target: false },
 ];
 
 /**
@@ -231,14 +237,16 @@ const isoToday = () => new Date().toISOString().slice(0, 10);
  * Create the import pipeline.
  *
  * @param {object} deps see the module header for each function's contract
- * @param {(word, vocabulary) => Promise<object>} deps.enrich
+ * @param {(word, vocabulary, language) => Promise<object>} deps.enrich
  * @param {(word) => Promise<number>} deps.appendWord
  * @param {(word) => Promise<void>} deps.writeAudioRefs
  * @param {(text, language, voice) => Promise<Blob>} deps.synthesize
  * @param {(filename, blob) => Promise<string>} deps.uploadClip
  * @param {(word) => Promise<void>} [deps.writePhrase] backfill only
  * @param {(word) => Promise<void>} [deps.writePhraseTranslation] backfill only
- * @param {(phrase) => Promise<string>} [deps.translatePhrase] backfill only
+ * @param {(phrase, language) => Promise<string>} [deps.translatePhrase] backfill only
+ * @param {() => string} [deps.language] active learning-language code
+ *   (#65/#78), defaults to "es"
  * @param {() => string} [deps.pickVoice] defaults to voices.js
  * @param {(ms) => Promise<void>} [deps.sleep] injectable clock for tests
  * @param {() => string} [deps.today] YYYY-MM-DD for date_added
@@ -253,6 +261,7 @@ export function createImporter({
   writePhrase,
   writePhraseTranslation,
   translatePhrase,
+  language = () => "es",
   pickVoice = defaultPickVoice,
   sleep = realSleep,
   today = isoToday,
@@ -293,8 +302,8 @@ export function createImporter({
       const rateLimited = new Map(); // clip kind → error, this pass only
 
       const synthesized = await Promise.allSettled(
-        missing.map(({ textField, language }) =>
-          synthesize(updated[textField], language, pickVoice()),
+        missing.map(({ textField, target }) =>
+          synthesize(updated[textField], target ? language() : "en", pickVoice()),
         ),
       );
       const uploadable = [];
@@ -394,7 +403,7 @@ export function createImporter({
       let enrichment;
       try {
         enrichment = await withBackoff(
-          () => enrich(items[i].word, vocab),
+          () => enrich(items[i].word, vocab, language()),
           sleep,
         );
       } catch (error) {
@@ -406,7 +415,7 @@ export function createImporter({
         translation: enrichment.translation,
         example: enrichment.phraseEs,
         dateAdded: today(),
-        language: "es",
+        language: language(),
         timesShown: 0,
         timesRight: 0,
         timesWrong: 0,
@@ -515,7 +524,7 @@ export function createImporter({
       try {
         if (needs.phrase) {
           const enrichment = await withBackoff(
-            () => enrich(word.word, vocabulary),
+            () => enrich(word.word, vocabulary, language()),
             sleep,
           );
           word = { ...word, example: enrichment.phraseEs };
@@ -526,7 +535,7 @@ export function createImporter({
           }
         } else if (needs.phraseTranslation) {
           const phraseEn = await withBackoff(
-            () => translatePhrase(word.example),
+            () => translatePhrase(word.example, language()),
             sleep,
           );
           word = { ...word, phraseTranslation: phraseEn };

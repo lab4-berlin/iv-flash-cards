@@ -5,6 +5,7 @@ import {
   HEADER_ROW,
   sheetNeedsHeader,
   rowToWord,
+  forLanguage,
   wordToStatsRow,
   wordToAudioRefsRow,
   wordToNewRow,
@@ -140,6 +141,58 @@ test("rowToWord: explicit empty strings in the stats block also mean new word", 
   assert.equal(word.lastReviewed, null);
   assert.equal(word.intervalDays, 0);
   assert.equal(word.dueDate, null);
+});
+
+// --------------------------------------------- language rule (#65 / #78)
+
+/** Words rows differing only in column F, mapped like a sheet read. */
+function wordsWithLanguages(languages) {
+  return languages.map((language, i) =>
+    rowToWord(["palabra", "word", "", "", "2026-11-01", language], i + 2),
+  );
+}
+
+test("forLanguage keeps only rows matching the active code, order kept", () => {
+  const words = wordsWithLanguages(["es", "fr", "es", "de"]);
+  assert.deepEqual(
+    forLanguage(words, "es").map((w) => w.rowIndex),
+    [2, 4],
+  );
+  assert.deepEqual(
+    forLanguage(words, "fr").map((w) => w.rowIndex),
+    [3],
+  );
+});
+
+test("forLanguage: a blank column F counts as a match (hand-added rows)", () => {
+  const words = wordsWithLanguages(["es", "", "fr"]);
+  assert.deepEqual(
+    forLanguage(words, "es").map((w) => w.rowIndex),
+    [2, 3],
+  );
+  // The blank row follows whatever language is active.
+  assert.deepEqual(
+    forLanguage(words, "fr").map((w) => w.rowIndex),
+    [3, 4],
+  );
+});
+
+test("forLanguage: other-language rows are silently dropped, never an error", () => {
+  const words = wordsWithLanguages(["fr", "de"]);
+  assert.deepEqual(forLanguage(words, "es"), []);
+  assert.deepEqual(forLanguage([], "es"), []);
+});
+
+test("forLanguage is pure: the input array and its words are untouched", () => {
+  const words = wordsWithLanguages(["es", "fr"]);
+  const filtered = forLanguage(words, "es");
+  assert.equal(words.length, 2);
+  assert.equal(filtered[0], words[0]); // same Word objects, no copies
+});
+
+test("forLanguage: a single-language sheet passes through unchanged", () => {
+  const words = wordsWithLanguages(["es", "es", "es"]);
+  assert.deepEqual(forLanguage(words, "es"), words);
 });
 
 test("wordToStatsRow produces the 6 G:L cells in order", () => {

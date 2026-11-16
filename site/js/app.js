@@ -25,6 +25,7 @@ import {
   writePhraseTranslation,
 } from "./sheets.js";
 import { readSettings, writeLearningLanguage } from "./settings.js";
+import { forLanguage } from "./model.js";
 import {
   buildQueue,
   buildAheadQueue,
@@ -113,6 +114,21 @@ const MESSAGE_STATES = [
 const FADE_MS = 150;
 
 let words = []; // the loaded vocabulary; grading mutates its entries
+
+// The active learning language (#65/#78): `Settings!learning_language`,
+// read once per visit by `begin` (default "es" when unset). Every
+// `loadWords` result is filtered through model.js `forLanguage` with this
+// code — the ONE place the language rule applies; everything downstream
+// (scheduler, distractors, playlists, home counts, import dedupe,
+// backfill) consumes `words` and needs no filter of its own.
+let learningLanguage = "es";
+
+/** Record the active language wherever it gets decided (startup read or
+ *  the onboarding picker) and point the Web Speech fallback at it. */
+function setLearningLanguage(code) {
+  learningLanguage = code || "es";
+  speech.setLanguage(learningLanguage);
+}
 let session = null; // { queue, today, knew, didnt, mode: "cards" | "choices" }
 let revealed = false; // classic: back face shown
 let question = null; // choices: { word, options, correctIndex }
@@ -330,9 +346,13 @@ async function freshToken() {
 // the user-supplied key (ADR-0004), rows and clips go through the OAuth
 // token (sheets.js / drive.js, ADR-0005).
 const importer = createImporter({
-  enrich: (word, vocabulary) => enrichWord(apikey.getKey(), word, vocabulary),
+  enrich: (word, vocabulary, language) =>
+    enrichWord(apikey.getKey(), word, vocabulary, language),
   appendWord: async (word) => appendWords(await freshToken(), [word]),
   writeAudioRefs: async (word) => writeAudioRefs(await freshToken(), word),
+  // Active code into column F, enrichment prompts and target-language
+  // clips (#78); a getter because the language is read after wiring.
+  language: () => learningLanguage,
   synthesize: (text, language, voice) =>
     synthesize(apikey.getKey(), text, language, voice),
   uploadClip: async (filename, blob) => {
@@ -343,7 +363,8 @@ const importer = createImporter({
   writePhrase: async (word) => writePhrase(await freshToken(), word),
   writePhraseTranslation: async (word) =>
     writePhraseTranslation(await freshToken(), word),
-  translatePhrase: (phrase) => translatePhrase(apikey.getKey(), phrase),
+  translatePhrase: (phrase, language) =>
+    translatePhrase(apikey.getKey(), phrase, language),
 });
 
 // Created lazily on first open: its "Open sheet" link needs the sheet URL,
@@ -357,7 +378,8 @@ function openImport() {
     getVocabulary: () => words.map((w) => w.word),
     getWords: () => words,
     reloadWords: async () => {
-      words = await loadWords(await freshToken());
+      // The language rule, same single spot as startup (#65).
+      words = forLanguage(await loadWords(await freshToken()), learningLanguage);
       return words;
     },
     fetchClip: async (fileId) => fetchClip(await freshToken(), fileId),
@@ -549,7 +571,10 @@ async function loadAndBegin() {
       await ensureHeader(token);
       headerEnsured = true;
     }
-    words = await loadWords(token);
+    // The language rule (#65), applied at the load boundary: every mode
+    // downstream sees only active-language words (blank F counts as a
+    // match); other-language rows wait untouched in the sheet.
+    words = forLanguage(await loadWords(token), learningLanguage);
   } catch (error) {
     if (error?.status === 401) {
       els.signinHint.textContent = "Your session expired — sign in again.";
@@ -617,6 +642,10 @@ async function begin() {
     return;
   }
 
+  // The visit's active language (#65): every subsequent loadWords filters
+  // to it; unset (mid-onboarding) falls back to "es" until the picker runs.
+  setLearningLanguage(settings.learning_language);
+
   route(
     nextStep({
       sheetExisted,
@@ -644,6 +673,7 @@ async function saveLanguage(code) {
     return;
   }
   onboard.setSaving(false);
+  setLearningLanguage(code); // the picked language is active immediately
   route(nextStep({ sheetExisted, learningLanguage: code, hasKey: apikey.getKey() != null }));
 }
 
@@ -682,8 +712,9 @@ const clipPlayer = createClipPlayer({
   fetchClip: async (fileId) => fetchClip(await freshToken(), fileId),
 });
 
-// Which clip each speaker button plays: word speakers the Spanish word
-// clip, phrase speakers the Spanish phrase clip (#71).
+// Which clip each speaker button plays: word speakers the target-language
+// word clip, phrase speakers the target-language phrase clip (#71; the
+// audio_*_es fields mean "target language", architecture.md §V3).
 const speakerClips = [
   [els.speakWordFront, "audioWordEs"],
   [els.speakWordBack, "audioWordEs"],
@@ -693,8 +724,9 @@ const speakerClips = [
 
 /**
  * Hairline/inert vs active speaker buttons (design-system disabled state).
- * A speaker is active when its clip exists OR a Spanish voice does (#71);
- * re-run on every card render (clips are per word) and on voiceschanged.
+ * A speaker is active when its clip exists OR a voice for the learning
+ * language does (#71); re-run on every card render (clips are per word)
+ * and on voiceschanged.
  */
 function updateSpeakers() {
   const word = shownWord();

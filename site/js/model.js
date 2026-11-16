@@ -79,6 +79,22 @@ export function rowToWord(row, rowIndex) {
 }
 
 /**
+ * The language rule (#65, architecture.md §V3), applied in ONE place: the
+ * app calls this immediately after every `loadWords`, so everything
+ * downstream — scheduler, distractors, playlists, home counts, import
+ * dedupe, backfill — sees only active-language words and no mode needs its
+ * own filter. A blank column `F` counts as matching (forgiving to
+ * hand-added rows); other-language rows wait untouched in the sheet.
+ * Pure — returns a new array, input order kept.
+ * @param {ReturnType<typeof rowToWord>[]} words mapped sheet rows
+ * @param {string} code the active language code (`Settings!learning_language`)
+ * @returns {ReturnType<typeof rowToWord>[]} the words of that language
+ */
+export function forLanguage(words, code) {
+  return words.filter((word) => word.language === "" || word.language === code);
+}
+
+/**
  * Map a Word to the 6-element array for the app-owned stats block `G:L`.
  * Nulls become empty cells. Grading writes only this block — user text
  * columns (A:F) are never touched (ADR-0003).

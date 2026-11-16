@@ -22,22 +22,46 @@ tools needed.
 
 | Col | Header | Who fills it | Format | Notes |
 |-----|--------|--------------|--------|-------|
-| A | `word` | you | text | The Spanish word, e.g. `la manzana` |
+| A | `word` | you | text | The word in the language you're learning, e.g. `la manzana` |
 | B | `translation` | you | text | English translation |
-| C | `example` | you | text | Optional example phrase; leave empty if none |
+| C | `example` | you | text | Optional example phrase (same language as the word); leave empty if none |
 | D | `phrase_translation` | the app (you may edit) | text | English translation of the example phrase |
 | E | `date_added` | you | `YYYY-MM-DD` | The day you added the word |
-| F | `language` | you | text | `es` for Spanish (the only language for now) |
+| F | `language` | you | text | Language code of the word: `es`, `fr`, `de`, `it`, `pt`, or `en`. See [The `language` column](#the-language-column) |
 | G | `times_shown` | the app | whole number | How often the card was shown |
 | H | `times_right` | the app | whole number | "Knew it" count |
 | I | `times_wrong` | the app | whole number | "Didn't know" count |
 | J | `last_reviewed` | the app | `YYYY-MM-DD` | Day of the last review |
 | K | `interval_days` | the app | whole number | Current repetition interval; `0` = new or just failed |
 | L | `due_date` | the app | `YYYY-MM-DD` | Next review day; empty = never reviewed = due now |
-| M | `audio_word_es` | the app | Drive file ID | Audio clip of the Spanish word |
-| N | `audio_phrase_es` | the app | Drive file ID | Audio clip of the Spanish example phrase |
+| M | `audio_word_es` | the app | Drive file ID | Audio clip of the word, spoken in its own language |
+| N | `audio_phrase_es` | the app | Drive file ID | Audio clip of the example phrase, spoken in its own language |
 | O | `audio_word_en` | the app | Drive file ID | Audio clip of the English word translation |
 | P | `audio_phrase_en` | the app | Drive file ID | Audio clip of the English phrase translation |
+
+> The `_es` in the M/N headers is historical — these columns hold the
+> **target-language** clips whatever the row's language is; renaming the
+> headers would be a pointless migration (see `docs/architecture.md`).
+> Translations (B, D, O, P) are always English.
+
+### The `language` column
+
+Column F ties each row to one learning language, matched against the
+`learning_language` key on the **`Settings`** worksheet (which the app sets
+when you pick a language in onboarding):
+
+- The app only shows rows whose F equals `Settings!learning_language` —
+  review, choices, listen, and the home counts all see just that language.
+  Rows in other languages are **silently ignored, never an error**: they
+  wait untouched in the sheet until you switch the setting back.
+- A **blank F counts as the active language**. This is deliberate
+  forgiveness for hand-added rows — you can leave F empty while adding
+  words and they'll show up. But note: a row with a blank F follows *every*
+  language setting, so fill F in if you keep words of more than one
+  language in the sheet.
+- To switch languages, change the `learning_language` value on the
+  `Settings` tab (a code from the table above) and reload the app. Words
+  the app imports get the active code written into F automatically.
 
 **You own the text columns A–F (the app backfills D for you), the app owns
 G–P.** During review grading the app writes only the stats block G–L, never
