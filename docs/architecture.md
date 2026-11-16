@@ -176,8 +176,8 @@ and headphone controls. Platform limits are contractual, see ADR-0006.
 Multi-user stays serverless: each user's sheet and audio folder live in
 their own Google account, created by the app at first sign-in and found
 again by **discovery, not configuration** — the same `drive.file` query
-pattern as the audio folder (ADR-0007). `SPREADSHEET_ID` is gone from
-`config.js`, the deploy workflow, and the repo secrets; `sheets.js` receives
+pattern as the audio folder (ADR-0007). The baked-in spreadsheet ID is gone
+from `config.js`, the deploy workflow, and the repo secrets; `sheets.js` receives
 the discovered ID once at startup (`setSpreadsheetId`). The sheet gains a
 second worksheet **`Settings`** (`A` = key, `B` = value); its first key,
 `learning_language`, doubles as the onboarding "done" signal: sheet exists

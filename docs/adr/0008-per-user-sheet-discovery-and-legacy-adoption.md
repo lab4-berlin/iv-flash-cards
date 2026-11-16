@@ -1,6 +1,6 @@
 # ADR-0008: Per-user sheet, discovered — not configured; legacy sheet adopted by copy
 
-**Status:** Accepted (supersedes the baked-in `SPREADSHEET_ID` of ADR-0001/#24)
+**Status:** Accepted (supersedes the baked-in spreadsheet ID of ADR-0001/#24)
 **Date:** 2026-11-13
 **Deciders:** Ilya (product owner), Maya (architect)
 **Related issues:** #62, #63
@@ -10,7 +10,7 @@
 V3 makes the app multi-user (family & friends, OAuth test-user list, settled
 direction): each user's vocabulary sheet and audio folder live in their own
 Google account, created by the app at first sign-in. The single baked-in
-`SPREADSHEET_ID` (a deploy-time secret, #24) cannot serve many users, and no
+spreadsheet ID (a deploy-time secret, #24) cannot serve many users, and no
 backend or database exists to map users to sheets. Two problems, one design:
 
 1. **Discovery:** how does the app find *this* user's sheet on any device,
@@ -47,7 +47,7 @@ backend or database exists to map users to sheets. Two problems, one design:
   instead of duplicating anything — the design's "Setup failed → Retry"
   contract.
 - `sheets.js` stops importing the ID from `config.js`; the discovered ID is
-  injected once at startup (`setSpreadsheetId`). `SPREADSHEET_ID` disappears
+  injected once at startup (`setSpreadsheetId`). The baked-in ID disappears
   from `config.js`, the deploy workflow, and the repo secrets. `config.js`
   keeps only the OAuth client ID.
 
