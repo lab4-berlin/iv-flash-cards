@@ -7,8 +7,15 @@
 // the queue, and reshuffles when the pool has cycled — so no word repeats
 // until every word has played once.
 
-/** Silence between segments within a word (#29 flow). */
-export const GAP_MS = 2000;
+/** Recall pause after each Spanish clip, before its translation (#81). */
+export const GAP_RECALL_MS = 2000;
+
+/** Short breather between the word pair and the phrase pair (#81). */
+export const GAP_BREATHER_MS = 1000;
+
+/** Separator trailing every word's sequence (#81). The block's last word
+ * keeps it as tail silence, so every word stays a fixed 8-segment unit. */
+export const GAP_BETWEEN_WORDS_MS = 2000;
 
 /** Default block length target (~10 minutes, ADR-0006). */
 export const DEFAULT_BLOCK_MS = 10 * 60 * 1000;
@@ -40,19 +47,24 @@ export function shuffle(words, random) {
 }
 
 /**
- * The fixed per-word playback sequence (#29 flow):
- * Spanish word · 2s gap · Spanish phrase · 2s gap · English word ·
- * English phrase. Returned as data for the stitcher.
+ * The fixed per-word playback sequence (#81, ADR-0006 as amended):
+ * word_es · 2s recall pause · word_en · 1s breather · phrase_es · 2s recall
+ * pause · phrase_en · 2s separator — hear the Spanish, pause to recall, get
+ * the confirmation; first for the word, then for the phrase. Returned as
+ * data for the stitcher; always exactly 8 segments, so cue k in a block
+ * sits at segment `k * 8`. Pause lengths are fixed, not configurable.
  * @returns {Array<{type: "clip", fileId: string} | {type: "gap", ms: number}>}
  */
 export function wordSequence(word) {
   return [
     { type: "clip", fileId: word.audioWordEs },
-    { type: "gap", ms: GAP_MS },
-    { type: "clip", fileId: word.audioPhraseEs },
-    { type: "gap", ms: GAP_MS },
+    { type: "gap", ms: GAP_RECALL_MS },
     { type: "clip", fileId: word.audioWordEn },
+    { type: "gap", ms: GAP_BREATHER_MS },
+    { type: "clip", fileId: word.audioPhraseEs },
+    { type: "gap", ms: GAP_RECALL_MS },
     { type: "clip", fileId: word.audioPhraseEn },
+    { type: "gap", ms: GAP_BETWEEN_WORDS_MS },
   ];
 }
 

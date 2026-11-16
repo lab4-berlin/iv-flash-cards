@@ -16,18 +16,18 @@
 import {
   eligibleWords,
   shuffle,
+  wordSequence,
   buildBlockPlan,
-  GAP_MS,
   DEFAULT_BLOCK_MS,
 } from "./playlist.js";
 import { stitch, clipDuration, createClipCache } from "./stitcher.js";
 
 /**
- * What plays at each index of playlist.js's fixed 6-segment word sequence
+ * What plays at each index of playlist.js's fixed 8-segment word sequence
  * (`null` = silence gap). Kind names match drive.js's clip kinds; the UI
  * maps them to the word's text fields for the now-playing line.
  */
-const SEGMENT_KINDS = ["word_es", null, "phrase_es", null, "word_en", "phrase_en"];
+const SEGMENT_KINDS = ["word_es", null, "word_en", null, "phrase_es", null, "phrase_en", null];
 
 // Player states, in the design's terms (design/listening-mode.md):
 // idle → loading → playing ⇄ paused, plus empty (nothing listenable) and
@@ -179,9 +179,12 @@ export function createPlayer({
       for (const [i, id] of ids.entries()) {
         clips.set(id, parsed[i]);
         durations.set(id, clipDuration(parsed[i].pcm, parsed[i].sampleRate));
-        totalMs += durations.get(id);
       }
-      totalMs += 2 * GAP_MS;
+      // The word's duration comes from its actual sequence, so playlist.js
+      // stays the single source of truth for the gaps.
+      for (const segment of wordSequence(word)) {
+        totalMs += segment.type === "gap" ? segment.ms : durations.get(segment.fileId);
+      }
     }
 
     if (taken.length === 0) throw new Error("no block: every clip fetch failed");

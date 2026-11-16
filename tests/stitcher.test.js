@@ -10,7 +10,13 @@ import {
   createClipCache,
 } from "../site/js/stitcher.js";
 import { pcmToWav } from "../site/js/tts.js";
-import { wordSequence, buildBlockPlan, GAP_MS } from "../site/js/playlist.js";
+import {
+  wordSequence,
+  buildBlockPlan,
+  GAP_RECALL_MS,
+  GAP_BREATHER_MS,
+  GAP_BETWEEN_WORDS_MS,
+} from "../site/js/playlist.js";
 
 /** Int16Array with a recognizable ramp: value = seed + index. */
 function ramp(length, seed = 0) {
@@ -177,15 +183,20 @@ test("a planned block stitches with cues matching the plan", () => {
   const plan = buildBlockPlan([word(1), word(2)], Infinity, durations);
   const { offsetsMs, totalMs } = stitch(plan.segments, clips);
 
-  // Word k's actual start = offset of its first segment (6 segments/word).
+  // Word k's actual start = offset of its first segment (8 segments/word).
   const segmentsPerWord = wordSequence(word(1)).length;
+  assert.equal(segmentsPerWord, 8);
   for (const [k, cue] of plan.cues.entries()) {
     assert.equal(offsetsMs[k * segmentsPerWord], cue.startMs);
   }
-  assert.equal(totalMs, plan.totalMs);
-  // Sanity: the gaps the plan counts are the ones stitched (word 1:
-  // 100 + gap + 200 + gap + 300 + 400).
-  assert.equal(plan.cues[1].startMs, 1000 + 2 * GAP_MS);
+  // Equal up to float summation noise (clip durations are fractional ms).
+  assert.ok(Math.abs(totalMs - plan.totalMs) < 1e-6);
+  // Sanity: the gaps the plan counts are the ones stitched (word 1's four
+  // clips total 1000 ms, plus 7000 ms of gaps including the separator).
+  assert.equal(
+    plan.cues[1].startMs,
+    1000 + 2 * GAP_RECALL_MS + GAP_BREATHER_MS + GAP_BETWEEN_WORDS_MS
+  );
 });
 
 // --------------------------------------------------------------- clip cache

@@ -749,7 +749,7 @@ button {
 }
 
 /* The glanceable anchor: stays huge and fixed through the word's whole
-   6-step sequence. */
+   8-step sequence. */
 .listen-word {
   font-size: 44px;
   font-weight: 600;
