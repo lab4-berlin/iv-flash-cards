@@ -6,16 +6,19 @@ import { pcmToWav } from "../site/js/tts.js";
 
 // All fake clips use 1000 Hz (1 sample = 1 ms) for readable time math,
 // like the stitcher tests. Every clip is CLIP_MS long, so one word is
-// 4 × CLIP_MS + 7000 ms of gaps (#81 sequence) = 7400 ms, and with
-// blockMs = 8000 a block takes exactly two words (7400 < 8000 → take
-// another → 14800 ≥ 8000).
+// 4 × CLIP_MS + 7000 ms of gaps (#81 sequence) = 31000 ms. Block 1 of a
+// session targets 60 s (#82 ramp) and therefore takes exactly two words
+// (31000 < 60000 → take another → 62000 ≥ 60000); with the default
+// 3-word pool, block 2 (5-minute target) holds just word 3, the cycle's
+// end — the same two-then-one block shape the suite always used.
 const RATE = 1000;
-const CLIP_MS = 100;
+const CLIP_MS = 6000;
 const WORD_MS = 4 * CLIP_MS + 7000;
 
-/** Let promise chains (clip fetch → blob.arrayBuffer → parse) settle. */
+/** Let promise chains (clip fetch → blob.arrayBuffer → parse) settle.
+ * Generous: a prefetched 5-minute block pipelines many words. */
 async function settle() {
-  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+  for (let i = 0; i < 30; i++) await new Promise((r) => setImmediate(r));
 }
 
 class FakeAudio {
@@ -75,10 +78,12 @@ function wavBlob(ms) {
 }
 
 /**
- * Player wired to fakes. `fail(fileId)` makes that clip's fetch throw.
+ * Player wired to fakes. `fail(fileId)` makes that clip's fetch throw;
+ * `fetchTicks` makes every fetch take that many macrotask ticks, so
+ * fetches overlap and `concurrency.peak` records the in-flight maximum.
  * random always returns ~1, so shuffle keeps the original order.
  */
-function setup({ poolSize = 3, blockMs = 8000, fail = () => false } = {}) {
+function setup({ poolSize = 3, blockMs = 8000, fail = () => false, fetchTicks = 0 } = {}) {
   const audio = new FakeAudio();
   const mediaSession = {
     metadata: null,
@@ -94,11 +99,17 @@ function setup({ poolSize = 3, blockMs = 8000, fail = () => false } = {}) {
   const pool = Array.from({ length: poolSize }, (_, i) => word(i + 1));
   const states = [];
   const playing = [];
+  let inFlight = 0;
+  const concurrency = { peak: 0 };
 
   const player = createPlayer({
     fetchClip: async (fileId) => {
       fetched.push(fileId);
       if (fail(fileId)) throw new Error("drive down");
+      inFlight += 1;
+      concurrency.peak = Math.max(concurrency.peak, inFlight);
+      for (let i = 0; i < fetchTicks; i++) await new Promise((r) => setImmediate(r));
+      inFlight -= 1;
       return wavBlob(CLIP_MS);
     },
     audio,
@@ -111,7 +122,7 @@ function setup({ poolSize = 3, blockMs = 8000, fail = () => false } = {}) {
   player.onStateChange((s) => states.push(s));
   player.onNowPlaying((np) => playing.push(np));
 
-  return { player, audio, mediaSession, fetched, revoked, pool, states, playing };
+  return { player, audio, mediaSession, fetched, revoked, pool, states, playing, concurrency };
 }
 
 // ------------------------------------------------------------------- startup
@@ -154,9 +165,9 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
   const t = setup();
   await t.player.start(t.pool);
 
-  // Word 1 segments: word_es 0–100, gap –2100, word_en –2200, gap –3200,
-  // phrase_es –3300, gap –5300, phrase_en –5400, gap –7400; word 2 at 7400.
-  await t.audio.playTo(0.15);
+  // Word 1 segments (s): word_es 0–6, gap –8, word_en –14, gap –15,
+  // phrase_es –21, gap –23, phrase_en –29, gap –31; word 2 starts at 31.
+  await t.audio.playTo(6.5);
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[0],
     clip: null, // the recall pause
@@ -164,16 +175,16 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
     cycleSize: 3,
   });
 
-  await t.audio.playTo(2.15);
+  await t.audio.playTo(8.5);
   assert.equal(t.playing.at(-1).clip, "word_en");
-  await t.audio.playTo(3.25);
+  await t.audio.playTo(15.5);
   assert.equal(t.playing.at(-1).clip, "phrase_es");
-  await t.audio.playTo(5.35);
+  await t.audio.playTo(23.5);
   assert.equal(t.playing.at(-1).clip, "phrase_en");
   // Metadata holds the same word through the whole 8-segment sequence.
   assert.deepEqual(t.mediaSession.metadata, { title: "es1", artist: "en1" });
 
-  await t.audio.playTo(7.45); // word 2's word_es clip (7400–7500)
+  await t.audio.playTo(31.5); // word 2's word_es clip (31–37 s)
   assert.deepEqual(t.playing.at(-1), {
     word: t.pool[1],
     clip: "word_es",
@@ -184,7 +195,7 @@ test("timeupdate drives now-playing and MediaSession metadata", async () => {
 
   // No duplicate emissions while staying inside one segment.
   const emissions = t.playing.length;
-  await t.audio.playTo(7.46);
+  await t.audio.playTo(31.6);
   assert.equal(t.playing.length, emissions);
 });
 
@@ -194,7 +205,7 @@ test("now-playing walks all 8 segments of a word in the #81 order", async () => 
 
   const seen = [];
   // One probe inside each of word 1's eight segments (see timeline above).
-  for (const s of [0.05, 1.0, 2.15, 2.7, 3.25, 4.0, 5.35, 6.0]) {
+  for (const s of [0.5, 6.5, 8.5, 14.5, 15.5, 21.5, 23.5, 29.5]) {
     await t.audio.playTo(s);
     seen.push(t.playing.at(-1).clip);
   }
@@ -248,7 +259,7 @@ test("skipWord seeks to the next word's cue within the block", async () => {
   const t = setup();
   await t.player.start(t.pool);
 
-  t.audio.currentTime = 3.25; // inside word 1's phrase_es
+  t.audio.currentTime = 15.5; // inside word 1's phrase_es
   await t.player.skipWord();
   assert.equal(t.audio.currentTime, WORD_MS / 1000); // word 2's cue
   assert.deepEqual(t.playing.at(-1), {
@@ -265,7 +276,7 @@ test("skipWord at the block's last word starts the next block", async () => {
   await t.player.start(t.pool);
   await settle();
 
-  t.audio.currentTime = 8.0; // inside word 2, the block's last cue
+  t.audio.currentTime = 35.0; // inside word 2, the block's last cue
   await t.player.skipWord();
   assert.equal(t.audio.src, "blob:2");
   assert.equal(t.playing.at(-1).word, t.pool[2]);
@@ -278,21 +289,21 @@ test("pause freezes; resume restarts the interrupted clip from its start", async
   const t = setup();
   await t.player.start(t.pool);
 
-  await t.audio.playTo(2.15); // mid word_en (2100–2200)
+  await t.audio.playTo(8.5); // mid word_en (8–14 s)
   t.player.pause();
   assert.equal(t.player.state(), "paused");
   assert.equal(t.mediaSession.playbackState, "paused");
   assert.ok(t.audio.paused);
 
   await t.player.resume();
-  assert.equal(t.audio.currentTime, 2.1); // snapped back to the clip start
+  assert.equal(t.audio.currentTime, 8.0); // snapped back to the clip start
   assert.equal(t.player.state(), "playing");
 
   // Pausing inside a silence gap resumes in place.
-  await t.audio.playTo(1.0);
+  await t.audio.playTo(6.5);
   t.player.pause();
   await t.player.resume();
-  assert.equal(t.audio.currentTime, 1.0);
+  assert.equal(t.audio.currentTime, 6.5);
 });
 
 test("MediaSession action handlers drive the player", async () => {
@@ -307,6 +318,71 @@ test("MediaSession action handlers drive the player", async () => {
   await handler("nexttrack")();
   assert.equal(t.playing.at(-1).word, t.pool[1]);
   assert.equal(t.playing.at(-1).clip, "word_es"); // lands on the word's start
+});
+
+// --------------------------------------------- ramp-up block schedule (#82)
+
+test("block targets ramp 60 s → 5 min → steady across start → advance → advance", async () => {
+  // 15 words of 31 s each, steady target injected as one word. Block 1
+  // (60 s) = words 1–2; block 2 (5 min) = words 3–12 (9 × 31 s < 300 s, the
+  // 10th crosses it); block 3 (steady) = word 13.
+  const t = setup({ poolSize: 15, blockMs: WORD_MS });
+  await t.player.start(t.pool);
+  assert.equal(t.playing.at(-1).position, 1);
+
+  await settle();
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 3, "60 s block held exactly 2 words");
+
+  await settle();
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 13, "5-min block held exactly 10 words");
+
+  await settle();
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 14, "steady block held one 31 s word");
+});
+
+test("a fresh start() resets the ramp to the small first block", async () => {
+  const t = setup({ poolSize: 15, blockMs: WORD_MS });
+  await t.player.start(t.pool);
+  await settle();
+  await t.audio.end(); // into block 2 — the session is past the 60 s target
+  assert.equal(t.playing.at(-1).position, 3);
+
+  await t.player.start(t.pool); // new session, same player
+  assert.equal(t.playing.at(-1).position, 1);
+  await settle();
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 3, "first block is the 60 s one again");
+});
+
+test("skipWord from a block's last word advances with the correct next target", async () => {
+  const t = setup({ poolSize: 15, blockMs: WORD_MS });
+  await t.player.start(t.pool);
+  await settle(); // block 2 prefetched
+
+  t.audio.currentTime = 35.0; // inside word 2, the 60 s block's last cue
+  await t.player.skipWord();
+  assert.equal(t.playing.at(-1).position, 3);
+  assert.equal(t.player.state(), "playing");
+
+  await settle();
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 13, "the skipped-to block used the 5-min target");
+});
+
+test("clip fetches pipeline across words, capped at 6 in flight", async () => {
+  // Overlapping fetches (3 ticks each): the 60 s first block alone needs 8
+  // clips, so the limiter fills — but never exceeds — its 6 slots.
+  const t = setup({ poolSize: 15, blockMs: WORD_MS, fetchTicks: 3 });
+  await t.player.start(t.pool);
+  assert.equal(t.concurrency.peak, 6);
+
+  await settle(); // the 10-word block-2 prefetch (40 clips) runs through too
+  await t.audio.end();
+  assert.equal(t.playing.at(-1).position, 3, "pipelining kept queue order");
+  assert.equal(t.concurrency.peak, 6, "cap held during the big prefetch");
 });
 
 // ------------------------------------------------------------ failure modes

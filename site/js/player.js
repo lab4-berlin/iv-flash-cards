@@ -18,6 +18,7 @@ import {
   shuffle,
   wordSequence,
   buildBlockPlan,
+  blockTargetMs,
   DEFAULT_BLOCK_MS,
 } from "./playlist.js";
 import { stitch, clipDuration, createClipCache } from "./stitcher.js";
@@ -33,8 +34,30 @@ const SEGMENT_KINDS = ["word_es", null, "word_en", null, "phrase_es", null, "phr
 // idle → loading → playing ⇄ paused, plus empty (nothing listenable) and
 // error (a block could not be built at all, e.g. offline).
 
+/** Cap on clip fetches in flight while building a block (#82): upcoming
+ * words' clips are pipelined up to this many concurrent Drive requests. */
+const MAX_CLIP_FETCHES = 6;
+
 function clipIds(word) {
   return [word.audioWordEs, word.audioPhraseEs, word.audioWordEn, word.audioPhraseEn];
+}
+
+/** Run async tasks with at most `max` running at once, started in call
+ * order; a finishing task hands its slot straight to the next waiter. */
+function createLimiter(max) {
+  let active = 0;
+  const waiting = [];
+  return async (task) => {
+    if (active >= max) await new Promise((resolve) => waiting.push(resolve));
+    else active += 1;
+    try {
+      return await task();
+    } finally {
+      const next = waiting.shift();
+      if (next) next(); // slot handed over; `active` count unchanged
+      else active -= 1;
+    }
+  };
 }
 
 /** Index of the last entry in sorted `startsMs` at or before `ms`. */
@@ -60,6 +83,8 @@ function indexAt(startsMs, ms) {
  *   blockMs?: number,
  * }} options `fetchClip` is normally drive.fetchClip with the token bound
  *   by the caller; everything else defaults to the real browser APIs.
+ *   `blockMs` is the steady-state block target used once the #82 ramp-up
+ *   schedule (60 s, then 5 min) is past.
  * @returns {{
  *   start: (words: object[]) => Promise<void>,
  *   pause: () => void,
@@ -92,6 +117,8 @@ export function createPlayer({
   let cyclePos = 0; // words consumed from the current cycle
   let current = null; // playing block: {url, cues, cueStarts, segStarts, totalMs}
   let nextPromise = null; // block N+1 being built in the background
+  let blockIndex = 0; // per-session index of the next block to build (#82 ramp);
+  // owned by start()/advance() so stale or aborted builds can't drift it
   let generation = 0; // bumped by reset(); stale async work aborts
   let suppressEvents = false; // reset() pauses audio without emitting "paused"
   let lastEmitKey = null; // dedupes now-playing emissions
@@ -145,46 +172,75 @@ export function createPlayer({
 
   /**
    * Build the next block: take whole words off the cycle queue until the
-   * block is long enough or the cycle ends (a block never spans a
-   * reshuffle), fetch their clips, and stitch. A word whose clips cannot be
-   * fetched is skipped silently — never a gap or an error (#29); the cache
-   * does not keep failures, so the word gets retried next cycle. Throws
-   * only if not a single word could be built (e.g. offline).
+   * block reaches `targetMs` or the cycle ends (a block never spans a
+   * reshuffle), fetch their clips, and stitch. Upcoming words' clips are
+   * fetched concurrently — at most MAX_CLIP_FETCHES in flight in total
+   * (#82) — but words enter the block strictly in queue order. A word
+   * whose clips cannot be fetched is skipped silently — never a gap or an
+   * error (#29); the cache does not keep failures, so the word gets
+   * retried next cycle. Throws only if not a single word could be built
+   * (e.g. offline).
    */
-  async function buildBlock() {
+  async function buildBlock(targetMs) {
     const gen = generation;
     if (queue.length === 0) {
       queue = shuffle(pool, random); // pool exhausted → new cycle (#29)
       cyclePos = 0;
     }
+
+    // Kick off clip fetches for the cycle's upcoming words through a
+    // limiter: started in queue order, at most MAX_CLIP_FETCHES in flight.
+    // Once the block is full (`done`) or the build is stale, tasks still
+    // queued in the limiter reject instead of fetching.
+    let done = false;
+    const limit = createLimiter(MAX_CLIP_FETCHES);
+    const jobs = queue.map((word) => {
+      const parsedClips = Promise.all(
+        clipIds(word).map((id) =>
+          limit(() => {
+            if (done || generation !== gen) throw new Error("unneeded");
+            return clipCache.get(id);
+          })
+        )
+      );
+      parsedClips.catch(() => {}); // outcome handled where the job is consumed
+      return { word, parsedClips };
+    });
+
     const taken = [];
     const positions = [];
     const durations = new Map();
     const clips = new Map();
     let totalMs = 0;
 
-    while (queue.length > 0 && totalMs < blockMs) {
-      const word = queue.shift();
-      cyclePos += 1;
-      const ids = clipIds(word);
-      let parsed;
-      try {
-        parsed = await Promise.all(ids.map((id) => clipCache.get(id)));
-      } catch {
-        continue; // skip this word silently for this cycle
+    try {
+      for (const job of jobs) {
+        if (generation !== gen) throw new Error("stale build");
+        if (totalMs >= targetMs) break;
+        queue.shift(); // == job.word: consumed for this cycle either way
+        cyclePos += 1;
+        let parsed;
+        try {
+          parsed = await job.parsedClips;
+        } catch {
+          continue; // skip this word silently for this cycle
+        }
+        if (generation !== gen) throw new Error("stale build");
+        const ids = clipIds(job.word);
+        taken.push(job.word);
+        positions.push(cyclePos);
+        for (const [i, id] of ids.entries()) {
+          clips.set(id, parsed[i]);
+          durations.set(id, clipDuration(parsed[i].pcm, parsed[i].sampleRate));
+        }
+        // The word's duration comes from its actual sequence, so playlist.js
+        // stays the single source of truth for the gaps.
+        for (const segment of wordSequence(job.word)) {
+          totalMs += segment.type === "gap" ? segment.ms : durations.get(segment.fileId);
+        }
       }
-      if (generation !== gen) throw new Error("stale build");
-      taken.push(word);
-      positions.push(cyclePos);
-      for (const [i, id] of ids.entries()) {
-        clips.set(id, parsed[i]);
-        durations.set(id, clipDuration(parsed[i].pcm, parsed[i].sampleRate));
-      }
-      // The word's duration comes from its actual sequence, so playlist.js
-      // stays the single source of truth for the gaps.
-      for (const segment of wordSequence(word)) {
-        totalMs += segment.type === "gap" ? segment.ms : durations.get(segment.fileId);
-      }
+    } finally {
+      done = true; // fetches not yet started for untaken words never start
     }
 
     if (taken.length === 0) throw new Error("no block: every clip fetch failed");
@@ -201,7 +257,7 @@ export function createPlayer({
   }
 
   function prefetch() {
-    nextPromise = buildBlock().catch(() => null);
+    nextPromise = buildBlock(blockTargetMs(blockIndex, blockMs)).catch(() => null);
   }
 
   /** Swap `block` into the audio element and (unless `play` is false)
@@ -239,13 +295,16 @@ export function createPlayer({
     setState("loading");
     let block = pending ? await pending : null;
     if (generation !== gen) return;
-    if (!block) block = await buildBlock().catch(() => null);
+    // The failed prefetch never advanced blockIndex, so the retry rebuilds
+    // with the same target.
+    if (!block) block = await buildBlock(blockTargetMs(blockIndex, blockMs)).catch(() => null);
     if (generation !== gen) return;
     if (!block) {
       setState("error");
       return;
     }
     await playBlock(block, { play });
+    blockIndex += 1;
     prefetch();
   }
 
@@ -286,19 +345,21 @@ export function createPlayer({
     }
     queue = [];
     cyclePos = 0;
+    blockIndex = 0; // every session ramps up from the small first block (#82)
     if (mediaSession) {
       mediaSession.setActionHandler("play", resume);
       mediaSession.setActionHandler("pause", pause);
       mediaSession.setActionHandler("nexttrack", skipWord);
     }
     setState("loading");
-    const block = await buildBlock().catch(() => null);
+    const block = await buildBlock(blockTargetMs(0, blockMs)).catch(() => null);
     if (generation !== gen) return;
     if (!block) {
       setState("error");
       return;
     }
     await playBlock(block);
+    blockIndex = 1;
     prefetch();
   }
 
