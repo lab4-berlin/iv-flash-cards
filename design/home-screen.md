@@ -40,8 +40,12 @@ end-of-session screen also returns Home.
   separate "Review" button or mode picker. **Cards** starts a classic
   review session, **Choices** a multiple-choice one (`multiple-choice.md`).
 - Buttons stack vertically, all identical in size: 48px min height, 12px
-  gap; full-width minus margins on mobile, 280px fixed on web. Order never
-  changes.
+  gap. Order never changes.
+- **Width — mobile (<768px):** buttons span the full screen width minus the
+  16px stage padding on each side (`100vw − 32px`), with no other cap. They
+  must never shrink to the width of the title or status line — the menu's
+  width is set by the viewport, not by the text above it. **Web (≥768px):**
+  280px fixed, centered (unchanged).
 - Status line: "`N due · M words`". It is the only stat on the screen.
 
 ## States
