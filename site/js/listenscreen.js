@@ -10,7 +10,7 @@
 // whole screen outside any button is a play/pause target. Listening writes
 // no stats (ADR-0006) — nothing here touches the scheduler or the queue.
 
-import { nowPlayingLine, counterText, screenView } from "./listenflow.js";
+import { listenTexts, counterText, screenView } from "./listenflow.js";
 import { getKey } from "./apikey.js";
 import { openKeySetup } from "./keysetup.js";
 import { listenEmptyVariant } from "./keysetupflow.js";
@@ -78,8 +78,13 @@ export function initListenScreen({ player, getWords, onExit, onImport }) {
 
   player.onNowPlaying((np) => {
     if (!open) return;
-    els.word.textContent = np.word.word;
-    els.line.textContent = nowPlayingLine(np.word, np.clip);
+    // Spanish on top (word, then phrase), matching translation below
+    // (#90/#92); .is-phrase is the big slot's smaller wrapping variant
+    // (plain .phrase is taken by the review card's styles).
+    const texts = listenTexts(np.word, np.segment);
+    els.word.textContent = texts.big;
+    els.word.classList.toggle("is-phrase", texts.phrase);
+    els.line.textContent = texts.line;
     els.counter.textContent = counterText(np);
   });
 
@@ -143,6 +148,7 @@ export function initListenScreen({ player, getWords, onExit, onImport }) {
     open() {
       open = true;
       els.word.textContent = "";
+      els.word.classList.remove("is-phrase");
       els.line.textContent = "";
       els.counter.textContent = "";
       document.addEventListener("keydown", onKey);

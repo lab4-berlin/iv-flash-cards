@@ -10,34 +10,49 @@ still strictly monochrome. It is the only inverted screen in the app.
 ## Anatomy (both platforms, one layout)
 
 ```
-┌──────────────────────────────┐
-│ ✕                    12 / 87 │  ← close (48px) · cycle counter, muted
-│                              │
-│                              │
-│          la ventana          │  ← current word, huge, white
-│                              │
-│  Abre la ventana, por favor. │  ← line being spoken now, muted
-│                              │
-│                              │
-│        ┌──────┐ ┌────┐       │
-│        │  ⏸   │ │ ⏭  │       │  ← pause 96px solid · next 72px outline
-│        └──────┘ └────┘       │
-└──────────────────────────────┘
+┌──────────────────────────────┐        ┌──────────────────────────────┐
+│ ✕                    12 / 87 │        │ ✕                    12 / 87 │
+│                              │        │                              │
+│                              │        │     Abre la ventana,         │
+│          la ventana          │        │     por favor.               │  ← phrase half: Spanish phrase
+│                              │        │                              │
+│          the window          │        │   Open the window, please.   │  ← matching translation, muted
+│                              │        │                              │
+│                              │        │                              │
+│        ┌──────┐ ┌────┐       │        │        ┌──────┐ ┌────┐       │
+│        │  ⏸   │ │ ⏭  │       │        │        │  ⏸   │ │ ⏭  │       │
+│        └──────┘ └────┘       │        │        └──────┘ └────┘       │
+└──────────────────────────────┘        └──────────────────────────────┘
+         word half (steps 1–4)                 phrase half (steps 5–8)
 ```
 
-- **Current word**: 44px mobile / 64px web, weight 600, centered. Stays on
-  screen through the whole 8-step sequence of that word — this is the
-  glanceable anchor for the walking case.
-- **Now-playing line** (muted, 20px): shows the text of the clip currently
-  being spoken — the English word translation, then the Spanish phrase, then
-  the English phrase translation. Empty during the Spanish word clip itself
-  and during the pauses. Drivers ignore it; walkers can read along.
+- **Big slot — always Spanish** (#90): the word during the word half of the
+  sequence (44px mobile / 64px web), the phrase during the phrase half
+  (smaller, wrapping: 28px mobile / 40px web) — weight 600, centered, white.
+  The slot reserves the taller variant's height, so the swap causes no
+  layout shift. This is the glanceable anchor: the language being learned is
+  always the big thing on screen.
+- **Translation line — always English** (muted, 20px): the word translation
+  during the word half, the phrase translation during the phrase half.
+  **Hidden during the recall pauses** (the pause is for recalling — the
+  answer appears together with the spoken confirmation) and during the
+  Spanish clips preceding them. Space is reserved, so showing/hiding shifts
+  nothing. Drivers ignore it; walkers can read along.
 - **Controls**, bottom-center: play/pause (96×96, solid white square, black
   glyph) and next-word (72×72, outline). Fixed positions, never move or
   disappear. **The entire screen outside the controls also toggles
   play/pause** — a glove-friendly, no-look target.
 - Counter top-right (muted): position within the current cycle ("12 / 87").
   Resets when the cycle restarts. No other chrome.
+
+Per-step view mapping (the 8-segment sequence from ADR-0006/#81):
+
+| Steps                      | Big slot (Spanish) | Translation line (English) |
+|----------------------------|--------------------|----------------------------|
+| 1 word_es, 2 recall pause  | word               | hidden                     |
+| 3 word_en, 4 breather      | word               | word translation           |
+| 5 phrase_es, 6 recall pause| **phrase**         | hidden                     |
+| 7 phrase_en, 8 separator   | phrase             | phrase translation         |
 
 ## Behavior
 
@@ -62,8 +77,8 @@ still strictly monochrome. It is the only inverted screen in the app.
 | State | Trigger | Treatment |
 |-------|---------|-----------|
 | Playing | default | Pause glyph (two bars) on the big control. |
-| Paused | tap/Space | Play glyph (triangle); word and now-playing line stay frozen; muted "paused" caption above the controls. |
-| Loading | clips buffering at start or on slow network | Muted "loading…" caption in place of the now-playing line; controls visible but play disabled (hairline-inv) until the first clip is ready. |
+| Paused | tap/Space | Play glyph (triangle); the big slot and translation line stay frozen; muted "paused" caption above the controls. |
+| Loading | clips buffering at start or on slow network | Muted "loading…" caption in place of the translation line; controls visible but play disabled (hairline-inv) until the first clip is ready. |
 | Empty | no word has a complete clip set | Inverted message state: "Nothing to listen to yet", muted "Import words to generate audio" (links the dependency on #27), outline button "Import words", `✕` returns Home. |
 
 ## Explicitly not assumed

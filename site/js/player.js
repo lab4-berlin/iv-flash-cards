@@ -101,11 +101,14 @@ function indexAt(startsMs, ms) {
  *   skipWord: () => Promise<void>,
  *   stop: () => void,
  *   onNowPlaying: (cb: (np: {word: object, clip: string|null,
- *     position: number, cycleSize: number}) => void) => () => void,
+ *     segment: number, position: number, cycleSize: number}) => void) =>
+ *     () => void,
  *   onStateChange: (cb: (state: string) => void) => () => void,
  *   state: () => string,
  * }} `clip` in the now-playing payload is one of SEGMENT_KINDS (null during
- *   gaps); `position`/`cycleSize` drive the "12 / 87" cycle counter.
+ *   gaps); `segment` is the index 0–7 within the word's fixed 8-segment
+ *   sequence (#92 — the listen screen maps it to its two text slots);
+ *   `position`/`cycleSize` drive the "12 / 87" cycle counter.
  */
 export function createPlayer({
   fetchClip,
@@ -169,13 +172,17 @@ export function createPlayer({
       mediaSession.metadata =
         typeof MediaMetadata === "undefined" ? data : new MediaMetadata(data);
     }
-    const segment = indexAt(current.segStarts, ms);
-    const clip = SEGMENT_KINDS[segment % SEGMENT_KINDS.length];
-    const key = `${k}:${clip}`;
-    if (key === lastEmitKey) return;
-    lastEmitKey = key;
+    // The block-wide segment index dedupes per segment (#92): two gaps have
+    // the same `clip` (null) but render differently — e.g. the recall pause
+    // hides the translation line, the breather shows it — so a sparse
+    // timeupdate jumping gap-to-gap must still emit.
+    const blockSegment = indexAt(current.segStarts, ms);
+    const segment = blockSegment % SEGMENT_KINDS.length;
+    const clip = SEGMENT_KINDS[segment];
+    if (blockSegment === lastEmitKey) return;
+    lastEmitKey = blockSegment;
     for (const cb of nowPlayingCbs) {
-      cb({ word: cue.word, clip, position: cue.position, cycleSize: pool.length });
+      cb({ word: cue.word, clip, segment, position: cue.position, cycleSize: pool.length });
     }
   }
 

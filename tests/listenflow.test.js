@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { nowPlayingLine, counterText, screenView } from "../site/js/listenflow.js";
+import { listenTexts, counterText, screenView } from "../site/js/listenflow.js";
 
 const word = {
   word: "la ventana",
@@ -10,23 +10,57 @@ const word = {
   phraseTranslation: "Open the window, please.",
 };
 
-// ------------------------------------------------------- now-playing line
+// ------------------------------------- the two now-playing slots (#90/#92)
 
-test("line is empty during the Spanish word clip and the gaps", () => {
-  assert.equal(nowPlayingLine(word, "word_es"), "");
-  assert.equal(nowPlayingLine(word, null), "");
+test("word half (segments 0–3): the word on top, translation during 2–3 only", () => {
+  // 0 word_es and 1 recall pause: recall moment — translation hidden.
+  assert.deepEqual(listenTexts(word, 0), { big: "la ventana", line: "", phrase: false });
+  assert.deepEqual(listenTexts(word, 1), { big: "la ventana", line: "", phrase: false });
+  // 2 word_en and 3 breather: the confirmation stays readable.
+  assert.deepEqual(listenTexts(word, 2), {
+    big: "la ventana",
+    line: "the window",
+    phrase: false,
+  });
+  assert.deepEqual(listenTexts(word, 3), {
+    big: "la ventana",
+    line: "the window",
+    phrase: false,
+  });
 });
 
-test("line shows the clip being spoken: phrase, then the translations", () => {
-  assert.equal(nowPlayingLine(word, "phrase_es"), "Abre la ventana, por favor.");
-  assert.equal(nowPlayingLine(word, "word_en"), "the window");
-  assert.equal(nowPlayingLine(word, "phrase_en"), "Open the window, please.");
+test("phrase half (segments 4–7): the phrase on top, translation during 6–7 only", () => {
+  // 4 phrase_es and 5 recall pause: Spanish phrase big, translation hidden.
+  assert.deepEqual(listenTexts(word, 4), {
+    big: "Abre la ventana, por favor.",
+    line: "",
+    phrase: true,
+  });
+  assert.deepEqual(listenTexts(word, 5), {
+    big: "Abre la ventana, por favor.",
+    line: "",
+    phrase: true,
+  });
+  // 6 phrase_en and 7 separator: phrase translation below.
+  assert.deepEqual(listenTexts(word, 6), {
+    big: "Abre la ventana, por favor.",
+    line: "Open the window, please.",
+    phrase: true,
+  });
+  assert.deepEqual(listenTexts(word, 7), {
+    big: "Abre la ventana, por favor.",
+    line: "Open the window, please.",
+    phrase: true,
+  });
 });
 
-test("line tolerates a missing word or missing text fields", () => {
-  assert.equal(nowPlayingLine(null, "phrase_es"), "");
-  assert.equal(nowPlayingLine({ ...word, example: null }, "phrase_es"), "");
-  assert.equal(nowPlayingLine({ ...word, phraseTranslation: null }, "phrase_en"), "");
+test("missing word or missing text fields yield empty strings, no crashes", () => {
+  assert.deepEqual(listenTexts(null, 0), { big: "", line: "", phrase: false });
+  assert.deepEqual(listenTexts(null, 4), { big: "", line: "", phrase: true });
+  assert.equal(listenTexts({ ...word, word: null }, 0).big, "");
+  assert.equal(listenTexts({ ...word, translation: null }, 2).line, "");
+  assert.equal(listenTexts({ ...word, example: null }, 4).big, "");
+  assert.equal(listenTexts({ ...word, phraseTranslation: null }, 6).line, "");
 });
 
 // --------------------------------------------------------- cycle counter
